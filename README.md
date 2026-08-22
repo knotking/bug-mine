@@ -6,11 +6,17 @@ dependency — plus surfaces that tell a team which of them actually affect it.
 
 ## The problem
 
-Existing tooling is the wrong shape for how software actually breaks. Security scanners find
-CVEs, but CVEs are a minority of what breaks a build, and most flagged vulnerabilities aren't
-exploitable — so teams get heavy alert noise while the real causes go unreported: breaking
-changes, deprecations, functional regressions, build failures, compatibility and performance
-problems. AI coding assistants are increasing the volume.
+Existing tooling is the wrong shape for how software actually breaks. A peer-reviewed study of
+2,414 repositories measured a **92.0% false positive rate** in vulnerability scanners, caused
+primarily by flagging defects in code that is never reached. The larger problem is what they never
+report at all: **67%** of Maven packages have violated semantic versioning, **41.58%** of
+client-impacting breaking changes arrive in non-major upgrades, and **70%** of vulnerable
+dependencies require an update that breaks source code — so the tool that files the ticket is
+silent about what fixing it costs. Meanwhile hosted LLMs have stopped being versioned dependencies
+at all: GPT-4's code-execution success rate fell from **52% to 10% in three months with no version
+change**.
+
+Full evidence and sources in [`docs/motivation/`](docs/motivation/).
 
 ## Three surfaces on one catalog
 
@@ -41,6 +47,9 @@ the skills used to produce them. Nothing is deployed and no language or framewor
 All docs live in [`docs/`](docs/). See [`docs/README.md`](docs/README.md) for the layout and
 conventions.
 
+**Start here:** [`docs/motivation/`](docs/motivation/) — why this product should exist, with cited
+research on what current tooling gets wrong, where it is heading, and what the market looks like.
+
 | Document | What it covers |
 | --- | --- |
 | [`docs/requirements/bugmine.md`](docs/requirements/bugmine.md) | FR-1 – FR-20, FR-36 – FR-37; API and worker proposals |
@@ -57,6 +66,7 @@ conventions.
 | [`docs/architecture/promotion.md`](docs/architecture/promotion.md) | Candidate → corroboration → sanitization → shared catalog |
 | [`docs/architecture/metering.md`](docs/architecture/metering.md) | Inline cost ceilings, usage ledger, billing and product metrics |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
+| [`docs/motivation/`](docs/motivation/) | Researched problem evidence, trajectory, market sizing, and the solution mapped to both |
 | [`docs/adr/`](docs/adr/) | Decision records — append-only |
 
 Requirement IDs are unique and stable across every document. They are **not** sequential within a
