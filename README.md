@@ -19,9 +19,17 @@ problems. AI coding assistants are increasing the volume.
 | **Search / subscribe** | What is known about this software? | Requirements + architecture |
 | **Scan** | What is wrong with the code I have? | Requirements only |
 | **Advise** | Given what I propose to build, what will I run into? | Requirements + architecture + data model |
+| **Evals** | What is wrong with software nobody has reported on yet? | Requirements only |
 
 The advisor is being built first: it is the sharpest differentiator, the thinnest build on top of
 the catalog, and the cheapest way to find out whether the catalog produces advice anyone values.
+
+Bugs enter the catalog from **three origins** with different capabilities — crawling (broad,
+cheap, but structurally always behind what has been published), scanning customer repos (knows
+what actually breaks real systems, and improves as the customer base grows), and evals (the only
+origin that can find a defect nobody has reported). For LLM models, where no vendor publishes a
+defect tracker and behavior shifts under a stable identifier, evals are the *only* viable origin.
+See [`docs/requirements/discovery.md`](docs/requirements/discovery.md).
 
 ## Status
 
@@ -38,6 +46,8 @@ conventions.
 | [`docs/requirements/bugmine.md`](docs/requirements/bugmine.md) | FR-1 – FR-20, FR-36 – FR-37; API and worker proposals |
 | [`docs/requirements/advisor.md`](docs/requirements/advisor.md) | FR-21 – FR-35 — the advisor surface |
 | [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) | NFR-1 – NFR-40 — performance, scale, availability, security, operability |
+| [`docs/requirements/bug-taxonomy.md`](docs/requirements/bug-taxonomy.md) | FR-38 – FR-39 — what bugs are covered, subject × type matrix, concrete examples |
+| [`docs/requirements/discovery.md`](docs/requirements/discovery.md) | FR-40 – FR-56 — three discovery origins, the scan feedback loop, and evals |
 | [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
 | [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
@@ -55,6 +65,9 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
   this is enforced by schema and set membership rather than by prompting.
 - [ADR-0003](docs/adr/0003-catalog-seeding-strategy.md) — hand-seed a narrow catalog slice across
   all seven subject domains before building crawlers.
+- [ADR-0004](docs/adr/0004-scan-derived-catalog-entries.md) — bugs found while scanning customer
+  repos feed the shared catalog, but only as candidates until corroborated across unaffiliated
+  tenants; own-code findings never do.
 
 ## Open
 
@@ -62,6 +75,10 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
   [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) is proposed, not
   measured or committed. They unblock most of `ingestion.md`'s open decisions once agreed.
 - **Own-code analysis** (FR-36, FR-37) is unscoped — a different engine from catalog lookup.
+- **The value of *k*** in the corroboration threshold (FR-44) is unset: too low leaks tenant
+  information, too high starves the catalog when it is thinnest.
+- **Probabilistic eval failures** have no corroboration model yet — LLM defects often reproduce at
+  a *rate* rather than reliably, which a boolean threshold would reject.
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.
 

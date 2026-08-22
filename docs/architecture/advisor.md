@@ -110,8 +110,8 @@ model-only advice would silently convert BugMine into a chatbot with a confident
   `postgresql@unknown`; retrieval then matches every version's bugs. Unknown versions must widen
   results *and* be surfaced as an FR-27 question, not silently treated as "all versions".
 - **Empty catalog reads as a clean bill of health.** At launch the catalog is thin, so "no
-  findings" will usually mean "not covered". This is open question A3 and it is the most likely
-  way early users are misled.
+  findings" will usually mean "not covered". FR-39 now requires this to be stated explicitly
+  rather than returned as silence — the single most likely way early users would be misled.
 - **Ranking without workload.** FR-31 needs the stated scale; absent it, a scale-triggered bug
   ranks the same as an always-on one. Missing workload should lower confidence, not be ignored.
 - **Version-range false positives.** Covered in [`../data-model/stack-profile.md`](../data-model/stack-profile.md) — the quiet failure, since a wrong match looks exactly like a right one.
@@ -125,7 +125,7 @@ model-only advice would silently convert BugMine into a chatbot with a confident
 | # | Decision | Blocked on |
 | --- | --- | --- |
 | **A-D1** | Interactive advisor (question round trips) vs one-shot report | Open question A1 |
-| **A-D2** | Whether uncovered components are stated explicitly or silently omitted | Open question A3 — recommend explicit |
+| ~~A-D2~~ | Whether uncovered components are stated explicitly or silently omitted | **Closed 2026-08-22** by FR-39: coverage is explicit and an uncovered subject returns "not covered", never silence. |
 | **A-D3** | Retrieval strategy: exact component match, or semantic search over records | Catalog size; exact match is right while seeded |
 | **A-D4** | Whether the Reasoner is one call or one per component with a synthesis pass | Cost ceiling; the second grounds better and costs more |
 

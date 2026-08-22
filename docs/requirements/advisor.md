@@ -73,7 +73,7 @@ repository, and the advisor predicts problems ahead of the work instead of findi
 | --- | --- |
 | **A1** | Is the advisor interactive — a conversation that asks FR-27's questions and refines — or a one-shot report? FR-27 implies a round trip; FR-34 implies a document. Both are buildable; they are different products. |
 | **A2** | For FR-23, does "existing repository" mean advising on a *proposed change* to that repo, or advising on the repo as it stands? The latter overlaps heavily with the scanner. |
-| **A3** | What does the advisor do when the catalog has no records for a component at all — silence, or an explicit "this component is not covered"? Silence is indistinguishable from a clean bill of health. |
+| ~~A3~~ | **Closed 2026-08-22** by FR-39 in [`bug-taxonomy.md`](bug-taxonomy.md): coverage is explicit; an uncovered subject returns "not covered", never an empty result. |
 | **A4** | Does advisor usage bill under FR-17's token/scan model, and does an advice run count as a "scan" for FR-19's metrics? |
 
 ---

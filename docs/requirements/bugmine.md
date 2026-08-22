@@ -111,9 +111,10 @@ and scoping it is deliberately left to its own design pass.
 
 ## Non-goals
 
-- **Evals on LLMs and repos to identify bugs** — the source marks this "mostly future work".
-  Worth noting it would become a second origin for catalog entries alongside crawling (FR-3),
-  so FR-1 should not assume a crawler is the only way a bug gets in.
+- ~~**Evals on LLMs and repos to identify bugs**~~ — **no longer a non-goal as of 2026-08-22.**
+  Promoted to a first-class discovery origin in [`discovery.md`](discovery.md) (FR-47 – FR-56),
+  alongside scan-derived records (FR-41). The note here anticipated that FR-1 should not assume
+  crawling is the only way a bug gets in; there are now three ways.
 
 ---
 

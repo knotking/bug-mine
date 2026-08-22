@@ -95,9 +95,23 @@ flowchart LR
   JOBSVC --> JOBDB
 ```
 
-Where scanning attaches later: a Scan API enqueues onto the **same** Job Queue with a different
-job type; scan workers lease from it, read the catalog through **Bug Query Service** (never
-directly from Bug DB), and report state to the **same** Job Service. No second pipeline.
+Where the other surfaces attach: a Scan API, an Advise API, and an Eval scheduler each enqueue
+onto the **same** Job Queue with their own job type; their workers lease from it, read the catalog
+through **Bug Query Service** (never directly from Bug DB), and report state to the **same** Job
+Service. No second pipeline, for any of them.
+
+**Update, 2026-08-22 — crawling is no longer the only origin.** Per
+[`../requirements/discovery.md`](../requirements/discovery.md), records now enter from three
+origins: crawling, scans (FR-41), and evals (FR-47 – FR-50). Structurally this changes less than
+it sounds, because all three converge on **Bug Service** as the sole writer of Bug DB — the
+boundary that made the plane split work in the first place. Two things it does change:
+
+- **Bug Service must accept a record origin (FR-40) and a promotion status (FR-43).** Candidate
+  records are tenant-visible only, so the read path through Bug Query Service now filters on
+  visibility as well as on FR-11's private-system rule.
+- **A promotion pipeline is new machinery** — it consumes candidates, evaluates corroboration
+  (FR-44), sanitizes (FR-45), and promotes. It is a stream consumer like the Indexer, not a job,
+  and its health is therefore measured as lag (NFR-33).
 
 ---
 
