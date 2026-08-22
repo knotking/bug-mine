@@ -47,8 +47,9 @@ the skills used to produce them. Nothing is deployed and no language or framewor
 All docs live in [`docs/`](docs/). See [`docs/README.md`](docs/README.md) for the layout and
 conventions.
 
-**Start here:** [`docs/motivation/`](docs/motivation/) — why this product should exist, with cited
-research on what current tooling gets wrong, where it is heading, and what the market looks like.
+**Start here:** [`docs/motivation/blog.md`](docs/motivation/blog.md) — the whole thing in one
+document: why this should exist (with cited research), what it is, how it is designed, and what is
+still open. Everything else in `docs/` is the detailed version of a section in that file.
 
 | Document | What it covers |
 | --- | --- |
