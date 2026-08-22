@@ -145,7 +145,7 @@ the sketch could not.
 | extraction worker ↔ `llm` | Prompt / structured response | sync | Job retries; raw artifact is already durable, so no re-crawl needed |
 | extraction worker → **Bug Service** | Structured bug records | sync | Job retries; dedup by content hash prevents duplicate versions |
 | `Bug DB` → **Indexer** | Change events via outbox or change stream | async | Index goes stale; search still serves, flagged degraded (§7) |
-| **Bug Query Service** → `search engine` | Query | sync | Fall back to Bug DB point reads or fail the search — decision D3 |
+| **Bug Query Service** → `search engine` | Query | sync | Fall back to Bug DB point reads or fail the search — decision I-D3 |
 
 ---
 
@@ -217,16 +217,18 @@ Also: `scehduler` → `scheduler`.
 
 ## 8. Open decisions
 
+*Namespaced `I-D` (ingestion) to stay distinct from `A-D` in [`advisor.md`](advisor.md), `M-D` in the data model, and the `D` series in [`../requirements/discovery.md`](../requirements/discovery.md).*
+
 Each is an `adr` candidate. None can be closed without NFRs.
 
 | # | Decision | Status after NFRs |
 | --- | --- | --- |
-| **D1** | Index every bug version, or current-only with point-in-time lookups from Bug DB | **Partly unblocked.** NFR-7 sizes the corpus at 500k versions — tractable either way. Still needs a product answer on whether FR-7 means point-in-time search. |
-| **D2** | Indexer trigger: transactional outbox, DB change stream, or scheduled batch | **Unblocked.** NFR-5 caps index lag at p95 < 5 min, which rules out scheduled batch at any useful interval. Outbox or change stream. |
-| **D3** | Search-engine outage behavior: fail, or degrade to Bug DB point reads | **Unblocked.** NFR-11 (99.9% query plane) and NFR-13 (available while ingestion is degraded) require degrading, not failing. |
-| **D4** | Whether "private system" (FR-11) is a tenant, a deployment, or a record flag | **Still open.** Q4, now with a dual-deployment complication — see NFR-25 and open question N3. |
-| **D5** | Queue and search engine technology | **Unblocked to choose.** NFR-6 – NFR-10 give the sizing; NFR-9's 10× CI burst is the binding constraint on the queue. |
-| **D6** | Whether extraction is a separate worker pool or a stage in one worker | **Unblocked.** NFR-39/40 require per-job cost attribution and a hard ceiling, which is far cleaner with extraction as its own job type. |
+| **I-D1** | Index every bug version, or current-only with point-in-time lookups from Bug DB | **Partly unblocked.** NFR-7 sizes the corpus at 500k versions — tractable either way. Still needs a product answer on whether FR-7 means point-in-time search. |
+| **I-D2** | Indexer trigger: transactional outbox, DB change stream, or scheduled batch | **Unblocked.** NFR-5 caps index lag at p95 < 5 min, which rules out scheduled batch at any useful interval. Outbox or change stream. |
+| **I-D3** | Search-engine outage behavior: fail, or degrade to Bug DB point reads | **Unblocked.** NFR-11 (99.9% query plane) and NFR-13 (available while ingestion is degraded) require degrading, not failing. |
+| **I-D4** | Whether "private system" (FR-11) is a tenant, a deployment, or a record flag | **Still open.** Q4, now with a dual-deployment complication — see NFR-25 and open question N3. |
+| **I-D5** | Queue and search engine technology | **Unblocked to choose.** NFR-6 – NFR-10 give the sizing; NFR-9's 10× CI burst is the binding constraint on the queue. |
+| **I-D6** | Whether extraction is a separate worker pool or a stage in one worker | **Unblocked.** NFR-39/40 require per-job cost attribution and a hard ceiling, which is far cleaner with extraction as its own job type. |
 
 ---
 

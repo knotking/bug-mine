@@ -87,8 +87,13 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
 - **Bug identity across origins** (FR-70) is unresolved — the same defect is described in
   different vocabularies by a changelog, a scan, and an eval, and cross-origin corroboration
   depends on matching them.
-- **The scanner has no architecture** — five requirements for the surface the positioning calls
-  the product, with reachability (static call-graph vs LLM-judged) still the largest cost fork.
+- **Four surfaces have requirements but no architecture**: scan (FR-12 – FR-16, the surface the
+  positioning calls the product, with reachability still the largest cost fork), evals
+  (FR-47 – FR-56), own-code analysis (FR-36, FR-37), and billing/metering (FR-17 – FR-19).
+- **The promotion pipeline** (FR-43 – FR-46) is named in `ingestion.md` but not designed, despite
+  being the mechanism ADR-0004 depends on.
+- **No API contracts exist.** Appendix A of `bugmine.md` is a proposal; `api-design` has not run,
+  so nothing is versioned or specified.
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.
 

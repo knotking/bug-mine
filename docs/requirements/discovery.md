@@ -165,6 +165,8 @@ would be a mistake.
 
 ## 6. Open decisions
 
+*The `D` series here is distinct from `I-D` in [`../architecture/ingestion.md`](../architecture/ingestion.md).*
+
 | # | Decision |
 | --- | --- |
 | **D1** | The value of *k* in FR-44. Too low leaks; too high starves the catalog at the scale where it is most needed. Likely varies by how specific the record is. |
