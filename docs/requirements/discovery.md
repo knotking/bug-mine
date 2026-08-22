@@ -115,9 +115,14 @@ one that can discover a defect nobody has reported.
 
 | Origin | Corroborated by | Fails when |
 | --- | --- | --- |
-| Crawled | The publishing source itself | The source is wrong or stale |
+| Crawled | The publishing source itself | The source is wrong, stale, or **hostile** — see [ADR-0005](../adr/0005-untrusted-content-in-model-pipelines.md) |
 | Scan-derived | *k* unaffiliated tenants (FR-44) | The bug is rare, so it never reaches *k* |
 | Eval-derived | *n* reproducing runs (FR-55) | The defect is non-deterministic — which is the common case for LLM evals |
+
+Corroboration also runs in reverse: cross-tenant **dismissal** (FR-63 in
+[`feedback.md`](feedback.md)) is evidence that a record should not be in the shared catalog, and
+routes to the retraction path in [`record-lifecycle.md`](record-lifecycle.md). Without it the
+system could learn a record is real but never learn it is false.
 
 FR-55's weakness is worth stating plainly rather than discovering later: **LLM defects are often
 probabilistic.** A model that emits malformed structured output 4% of the time will not reproduce

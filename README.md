@@ -48,6 +48,8 @@ conventions.
 | [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) | NFR-1 – NFR-40 — performance, scale, availability, security, operability |
 | [`docs/requirements/bug-taxonomy.md`](docs/requirements/bug-taxonomy.md) | FR-38 – FR-39 — what bugs are covered, subject × type matrix, concrete examples |
 | [`docs/requirements/discovery.md`](docs/requirements/discovery.md) | FR-40 – FR-56 — three discovery origins, the scan feedback loop, and evals |
+| [`docs/requirements/feedback.md`](docs/requirements/feedback.md) | FR-57 – FR-63 — finding disposition, suppression, precision as a measured metric |
+| [`docs/requirements/record-lifecycle.md`](docs/requirements/record-lifecycle.md) | FR-64 – FR-71 — record states, retraction, bug identity and merging |
 | [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
 | [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
@@ -68,6 +70,9 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
 - [ADR-0004](docs/adr/0004-scan-derived-catalog-entries.md) — bugs found while scanning customer
   repos feed the shared catalog, but only as candidates until corroborated across unaffiliated
   tenants; own-code findings never do.
+- [ADR-0005](docs/adr/0005-untrusted-content-in-model-pipelines.md) — crawled pages and
+  third-party code are untrusted input to models; the blast radius of a successful prompt
+  injection is engineered rather than its probability.
 
 ## Open
 
@@ -79,6 +84,11 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
   information, too high starves the catalog when it is thinnest.
 - **Probabilistic eval failures** have no corroboration model yet — LLM defects often reproduce at
   a *rate* rather than reliably, which a boolean threshold would reject.
+- **Bug identity across origins** (FR-70) is unresolved — the same defect is described in
+  different vocabularies by a changelog, a scan, and an eval, and cross-origin corroboration
+  depends on matching them.
+- **The scanner has no architecture** — five requirements for the surface the positioning calls
+  the product, with reachability (static call-graph vs LLM-judged) still the largest cost fork.
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.
 

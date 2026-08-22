@@ -99,6 +99,27 @@ NFR-24 is easy to miss and expensive to get wrong: crawled content is public, bu
 not, and it routinely contains credentials. Any component that echoes code back — a finding
 excerpt, a stack trace, an OTel span attribute — is a potential exfiltration path.
 
+### Untrusted content in model pipelines
+
+Both the extraction worker (crawled pages) and the scan worker (third-party code inside a
+customer repo) feed attacker-influenceable content to a model. Per
+[ADR-0005](../adr/0005-untrusted-content-in-model-pipelines.md), the blast radius is engineered
+rather than the probability.
+
+| ID | Requirement |
+| --- | --- |
+| **NFR-41** | Crawled content and third-party code are treated as untrusted **data**, never as instructions, at every point they reach a model. |
+| **NFR-42** | Extraction and scan workers have no tool access and no network egress beyond their model endpoint. |
+| **NFR-43** | Model output is schema-constrained, and every field is validated against the component registry and applicability grammar before persistence. |
+| **NFR-44** | Crawl sources are an explicit vetted allowlist. No open-ended crawling of arbitrary domains. |
+| **NFR-45** | Suspected injection attempts are quarantined and alerted, never silently dropped. |
+| **NFR-46** | Every record is traceable to its raw artifact and can be retracted with its dependent findings invalidated (FR-67, FR-68). |
+
+NFR-46 is the control that assumes the others failed. Containment eventually does, and the
+difference between an incident and a crisis is whether every affected record can be found and
+undone. NFR-45 matters for a less obvious reason: silently discarding suspicious content means
+never learning that someone is targeting the pipeline.
+
 ## 6. Compliance
 
 | ID | Requirement |

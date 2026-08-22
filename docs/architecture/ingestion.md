@@ -203,6 +203,11 @@ Also: `scehduler` → `scheduler`.
 - **Extraction produces wrong records.** LLM extraction fails softly — plausible, wrong data.
   Every record must carry provenance back to its raw artifact so a bad batch can be identified
   and re-extracted.
+- **Extraction is fed hostile content.** Crawled pages are authored by whoever controls them, and
+  a successful injection writes attacker-chosen records into a *shared* catalog. Controls are in
+  [ADR-0005](../adr/0005-untrusted-content-in-model-pipelines.md) and NFR-41 – NFR-46; the
+  architectural consequence here is that the extraction worker must have **no tool access and no
+  network egress beyond its model endpoint**, which constrains this component permanently.
 - **Queue backs up under a large scheduled sweep.** Interactive search is unaffected once the
   planes are split (change 2) — that is the main thing the split buys.
 - **Duplicate job delivery.** At-least-once leasing means workers run twice; content-hash
