@@ -12,6 +12,7 @@ that is stated rather than omitted.
 | [`trajectory.md`](trajectory.md) | Where this goes over the next three years, and why the gap widens rather than closes |
 | [`market.md`](market.md) | Market sizes and growth rates, and the uncomfortable finding about which of them BugMine's flagship surface competes in |
 | [`solution.md`](solution.md) | What BugMine offers, mapped line by line to the evidence — including where the evidence bounds the solution |
+| [`blog.md`](blog.md) | The whole argument as a single public-facing post — narrative rather than reference |
 
 ---
 
