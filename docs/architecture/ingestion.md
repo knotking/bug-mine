@@ -3,10 +3,10 @@
 **Status:** Draft, for discussion
 **Sources:** `~/searchengine.png` (hand-drawn "Bug Data Ingestion Pipeline" sketch) and
 `docs/requirements/bugmine.md` (FR-1 – FR-20).
-**Constraint warning:** BugMine has **no non-functional requirements yet**. Architecture is
-normally a response to NFRs, so several decisions below cannot actually be settled — they are
-listed in [§8 Open decisions](#8-open-decisions) rather than guessed at. What *is* settled here
-is the component structure, which the FRs alone determine.
+**Constraint update, 2026-08-22:** NFRs now exist in
+[`../requirements/non-functional.md`](../requirements/non-functional.md), though every number in
+them is proposed rather than agreed. §8 records which decisions they unblock. The component
+structure below was determined by the FRs alone and is unaffected.
 
 ---
 
@@ -200,14 +200,14 @@ Also: `scehduler` → `scheduler`.
 
 Each is an `adr` candidate. None can be closed without NFRs.
 
-| # | Decision | Blocked on |
+| # | Decision | Status after NFRs |
 | --- | --- | --- |
-| **D1** | Index every bug version, or current-only with point-in-time lookups from Bug DB | Whether FR-7 means point-in-time search; index size targets |
-| **D2** | Indexer trigger: transactional outbox, DB change stream, or scheduled batch | Acceptable index staleness |
-| **D3** | Search-engine outage behavior: fail, or degrade to Bug DB point reads | Availability target |
-| **D4** | Whether "private system" (FR-11) is a tenant, a deployment, or a record flag | Open question Q4 in requirements |
-| **D5** | Queue and search engine technology | Scale and throughput targets |
-| **D6** | Whether extraction is a separate worker pool or a stage in one worker | Cost profile; both fit this structure |
+| **D1** | Index every bug version, or current-only with point-in-time lookups from Bug DB | **Partly unblocked.** NFR-7 sizes the corpus at 500k versions — tractable either way. Still needs a product answer on whether FR-7 means point-in-time search. |
+| **D2** | Indexer trigger: transactional outbox, DB change stream, or scheduled batch | **Unblocked.** NFR-5 caps index lag at p95 < 5 min, which rules out scheduled batch at any useful interval. Outbox or change stream. |
+| **D3** | Search-engine outage behavior: fail, or degrade to Bug DB point reads | **Unblocked.** NFR-11 (99.9% query plane) and NFR-13 (available while ingestion is degraded) require degrading, not failing. |
+| **D4** | Whether "private system" (FR-11) is a tenant, a deployment, or a record flag | **Still open.** Q4, now with a dual-deployment complication — see NFR-25 and open question N3. |
+| **D5** | Queue and search engine technology | **Unblocked to choose.** NFR-6 – NFR-10 give the sizing; NFR-9's 10× CI burst is the binding constraint on the queue. |
+| **D6** | Whether extraction is a separate worker pool or a stage in one worker | **Unblocked.** NFR-39/40 require per-job cost attribution and a hard ceiling, which is far cleaner with extraction as its own job type. |
 
 ---
 

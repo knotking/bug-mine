@@ -37,6 +37,7 @@ conventions.
 | --- | --- |
 | [`docs/requirements/bugmine.md`](docs/requirements/bugmine.md) | FR-1 – FR-20, FR-36 – FR-37; API and worker proposals |
 | [`docs/requirements/advisor.md`](docs/requirements/advisor.md) | FR-21 – FR-35 — the advisor surface |
+| [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) | NFR-1 – NFR-40 — performance, scale, availability, security, operability |
 | [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
 | [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
@@ -57,8 +58,9 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
 
 ## Open
 
-- **No non-functional requirements exist.** This blocks six architecture decisions (D1–D6 in
-  `ingestion.md`) and every technology choice.
+- **Non-functional requirements are drafted but unconfirmed.** Every number in
+  [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) is proposed, not
+  measured or committed. They unblock most of `ingestion.md`'s open decisions once agreed.
 - **Own-code analysis** (FR-36, FR-37) is unscoped — a different engine from catalog lookup.
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.

@@ -4,8 +4,9 @@
 **Requirements:** FR-21 – FR-35 in [`../requirements/advisor.md`](../requirements/advisor.md).
 **Builds on:** [`ingestion.md`](ingestion.md) — the advisor is a consumer of that catalog and a
 job on the same substrate, not a new pipeline.
-**Constraint warning:** still no NFRs. What is settled here is structure; latency, cost ceilings,
-and model selection are not.
+**Constraint update, 2026-08-22:** NFRs now exist — NFR-3 (advice p95 < 90 s for ≤ 30
+components), NFR-21 (per-tenant inference routing is a hard guarantee), and NFR-39/40 (per-job
+cost ceiling) all bind this design. A-D4 below is affected by the last of these.
 
 ---
 

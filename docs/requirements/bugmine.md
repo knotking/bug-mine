@@ -222,7 +222,6 @@ scans of the same dependency. Worth an ADR.
 
 ## Next
 
-Non-functional requirements are still not captured anywhere — the source has none, and this
-document deliberately doesn't invent them. `data-model` and `api-design` are the natural next
-steps for the appendices above, with NFRs needed before `architecture` can close its open
-decisions.
+Non-functional requirements now live in [`non-functional.md`](non-functional.md) (NFR-1 – NFR-40)
+— drafted 2026-08-22, every number proposed rather than measured. `api-design` is the natural
+next step for Appendix A.

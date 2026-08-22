@@ -8,7 +8,7 @@ Each design skill in `.claude/skills/` writes into its own subdirectory:
 
 | Path | Contents | Skill |
 | --- | --- | --- |
-| `docs/requirements/` | Functional and non-functional requirements, with stable `FR-n` / `NFR-n` IDs | `/requirements` |
+| `docs/requirements/` | Functional and non-functional requirements, with stable `FR-n` / `NFR-n` IDs (separate namespaces) | `/requirements` |
 | `docs/data-model/` | Entities, relationships, keys, indexes, migrations, ERDs | `/data-model` |
 | `docs/api/` | API contracts plus the machine-readable spec (OpenAPI / proto / SDL) | `/api-design` |
 | `docs/architecture/` | Components, boundaries, data flow, technology choices, failure modes | `/architecture` |
