@@ -111,7 +111,7 @@ boundary that made the plane split work in the first place. Two things it does c
   visibility as well as on FR-11's private-system rule.
 - **A promotion pipeline is new machinery** — it consumes candidates, evaluates corroboration
   (FR-44), sanitizes (FR-45), and promotes. It is a stream consumer like the Indexer, not a job,
-  and its health is therefore measured as lag (NFR-33).
+  and its health is therefore measured as lag (NFR-33). Designed in [`promotion.md`](promotion.md).
 
 ---
 
@@ -237,8 +237,9 @@ Each is an `adr` candidate. None can be closed without NFRs.
 Covered: FR-1 – FR-11 (catalog, crawlers, versioning, job state, search, poll, subscribe,
 reports, sharing boundary), FR-20 (worker telemetry via the shared substrate).
 
-**Not covered here** — the scan path (FR-12 – FR-16), own-code analysis (FR-36, FR-37), billing
-(FR-17), and product metrics (FR-18, FR-19).
+**Not covered here**, each now having its own document: the scan path and own-code analysis
+([`scanner.md`](scanner.md)), evals ([`evals.md`](evals.md)), candidate promotion
+([`promotion.md`](promotion.md)), and billing and metrics ([`metering.md`](metering.md)).
 
 **Correction, 2026-08-22:** this section previously stated the scanner was the only uncovered
 surface. That was written before the advisor existed. The catalog is a hub with **three**

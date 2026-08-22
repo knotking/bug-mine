@@ -52,6 +52,10 @@ conventions.
 | [`docs/requirements/record-lifecycle.md`](docs/requirements/record-lifecycle.md) | FR-64 – FR-71 — record states, retraction, bug identity and merging |
 | [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
 | [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
+| [`docs/architecture/scanner.md`](docs/architecture/scanner.md) | Two engines, dependency graph, reachability, secret redaction at the sandbox boundary |
+| [`docs/architecture/evals.md`](docs/architecture/evals.md) | Eval results as measurements with distributions; regression detection |
+| [`docs/architecture/promotion.md`](docs/architecture/promotion.md) | Candidate → corroboration → sanitization → shared catalog |
+| [`docs/architecture/metering.md`](docs/architecture/metering.md) | Inline cost ceilings, usage ledger, billing and product metrics |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
 | [`docs/adr/`](docs/adr/) | Decision records — append-only |
 
@@ -73,6 +77,8 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
 - [ADR-0005](docs/adr/0005-untrusted-content-in-model-pipelines.md) — crawled pages and
   third-party code are untrusted input to models; the blast radius of a successful prompt
   injection is engineered rather than its probability.
+- [ADR-0006](docs/adr/0006-reachability-analysis.md) — **Proposed, not accepted.** Narrow
+  candidates with cheap static symbol analysis, then judge the residue with a model.
 
 ## Open
 
@@ -87,13 +93,14 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
 - **Bug identity across origins** (FR-70) is unresolved — the same defect is described in
   different vocabularies by a changelog, a scan, and an eval, and cross-origin corroboration
   depends on matching them.
-- **Four surfaces have requirements but no architecture**: scan (FR-12 – FR-16, the surface the
-  positioning calls the product, with reachability still the largest cost fork), evals
-  (FR-47 – FR-56), own-code analysis (FR-36, FR-37), and billing/metering (FR-17 – FR-19).
-- **The promotion pipeline** (FR-43 – FR-46) is named in `ingestion.md` but not designed, despite
-  being the mechanism ADR-0004 depends on.
+- **Reachability is undecided.** [ADR-0006](docs/adr/0006-reachability-analysis.md) is
+  `Proposed`, not accepted — it is the largest cost fork in the system, and the scanner design
+  is shaped around its outcome.
+- **Bug identity across origins** (FR-70) is unsolved, and the promotion pipeline cannot corroborate
+  anything without it.
 - **No API contracts exist.** Appendix A of `bugmine.md` is a proposal; `api-design` has not run,
   so nothing is versioned or specified.
+- **No implementation.** Every surface is designed; none is built.
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.
 
