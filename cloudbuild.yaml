@@ -1,0 +1,26 @@
+# Build config rather than a bare `--tag`, so logging can be pinned to Cloud Logging.
+#
+# The default sends logs to a Google-owned GCS bucket, which a custom build identity cannot
+# write to without roles/storage.admin — a broad grant to avoid a logging default. Cloud
+# Logging needs only logging.logWriter, which the build account already has.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=${_IMAGE}:${_TAG}
+      - --tag=${_IMAGE}:latest
+      - .
+
+images:
+  - ${_IMAGE}:${_TAG}
+  - ${_IMAGE}:latest
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/bugmine-dev/bugmine/api
+  _TAG: v1
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

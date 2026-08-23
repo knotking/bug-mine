@@ -3,10 +3,13 @@ __pycache__/
 .venv/
 .env
 *.egg-info/
+
+# uv.lock IS committed. This is a deployable application, not a library: the container
+# build needs it for `uv sync --frozen`, and an uncommitted lock means the image is built
+# from whatever resolved that day.
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-uv.lock
 
 # Terraform
 .terraform/
