@@ -139,4 +139,5 @@ def test_the_nav_survives_narrow_screens() -> None:
 def test_narrow_screens_are_covered_by_breakpoints() -> None:
     """A phone is ~390px wide. Without a rule at or below 640 the desktop layout applies."""
     widths = [int(w) for w in re.findall(r"@media\(max-width:(\d+)px\)", _source())]
-    assert widths and min(widths) <= 640, f"narrowest breakpoint is {min(widths) if widths else None}"
+    assert widths, "no max-width breakpoints at all"
+    assert min(widths) <= 640, f"narrowest breakpoint is {min(widths)}px"
