@@ -19,7 +19,7 @@ from sqlalchemy import select
 
 from bugmine import identity
 from bugmine.db import make_engine, tenant_session
-from bugmine.models import ApiKey, Membership, Role, Team, Tenant, User
+from bugmine.models import ApiKey, Membership, PrivacyScope, Role, Team, Tenant, User
 
 
 def _engine():  # type: ignore[no-untyped-def]
@@ -300,12 +300,18 @@ def source_prune(args: argparse.Namespace) -> int:
     from bugmine.models import Source
 
     def _prune(session) -> tuple[int, int]:  # type: ignore[no-untyped-def]
-        rows = session.execute(select(Source).order_by(Source.created_at.asc())).scalars().all()
+        # Public first, then oldest. Age alone is the wrong rule when both scopes exist for one
+        # URL: only a public source is crawled by the system sweep, and ordering purely by
+        # created_at kept 115 tenant rows registered by mistake and deleted every public row
+        # behind them — which silently stopped the shared catalog from being crawled at all.
+        rows = session.execute(
+            select(Source).order_by(
+                (Source.privacy_scope == PrivacyScope.PUBLIC).desc(), Source.created_at.asc()
+            )
+        ).scalars().all()
         seen: set[str] = set()
         removed = 0
         for row in rows:
-            # Public rows are ordered first by created_at in practice, but the rule does not
-            # depend on that: the first row seen for a URL is kept and any later one dropped.
             if row.url in seen:
                 session.delete(row)
                 removed += 1
