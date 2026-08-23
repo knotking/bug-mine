@@ -56,11 +56,24 @@ def anonymous_session(request: Request) -> Iterator[Session]:
 
 
 def require_principal(
-    request: Request, authorization: str | None = Header(default=None)
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_bugmine_key: str | None = Header(default=None, alias="X-BugMine-Key"),
 ) -> Principal:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise _unauthorized()
-    token = authorization.split(" ", 1)[1].strip()
+    """Resolve the caller's principal from an API key.
+
+    Accepted on `Authorization: Bearer` — the documented contract — or on `X-BugMine-Key`.
+
+    The second exists because Cloud Run consumes `Authorization` for its own IAM check, and
+    this deployment must be invoked with a Google identity token while the org policy forbids
+    anonymous access. Two credentials cannot share one header. The alternate header is a
+    workaround for that constraint, not a second way to authenticate: it resolves to the same
+    principal through the same lookup, and it becomes unnecessary the moment the service can be
+    invoked anonymously.
+    """
+    token = (x_bugmine_key or "").strip()
+    if not token and authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
     if not token.startswith(KEY_PREFIX):
         raise _unauthorized()
 

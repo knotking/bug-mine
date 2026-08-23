@@ -131,5 +131,5 @@ class TestScope:
             )
         with tenant_session(engine, b) as s:
             calls: list[dict] = []
-            r = sweep(s, calls.append, now=NOW)
+            sweep(s, calls.append, now=NOW)
         assert all(c["url"] != url for c in calls), "tenant B swept tenant A's source"

@@ -206,3 +206,76 @@ class TestPublicSearch:
             )
         r = client.get("/v1/public/bugs/search", params={"q": ref})
         assert r.json() == []
+
+
+class TestConsole:
+    """The console's API surface.
+
+    The console sends its API key on `X-BugMine-Key` rather than `Authorization`, because Cloud
+    Run consumes the latter for its own IAM check on this deployment. These assert both headers
+    resolve to the same principal, so the workaround does not become a second, weaker way in.
+    """
+
+    def test_console_page_is_served(self, client: TestClient) -> None:
+        r = client.get("/console")
+        assert r.status_code == 200
+        assert "BugMine" in r.text
+
+    def test_whoami_identifies_the_principal(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, _ = two_tenants
+        key = _issue_key(engine, a)
+        body = client.get("/v1/whoami", headers={"X-BugMine-Key": key}).json()
+        assert body["tenant"]["id"] == str(a)
+        assert body["principal_kind"] == "team"
+
+    def test_both_headers_resolve_to_the_same_principal(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, _ = two_tenants
+        key = _issue_key(engine, a)
+        via_header = client.get("/v1/whoami", headers={"X-BugMine-Key": key}).json()
+        via_bearer = client.get("/v1/whoami", headers={"Authorization": f"Bearer {key}"}).json()
+        assert via_header == via_bearer
+
+    def test_console_endpoints_reject_an_unknown_key(self, client: TestClient) -> None:
+        for path in ("/v1/whoami", "/v1/tenant/members", "/v1/tenant/api-keys", "/v1/sources"):
+            assert client.get(path, headers={"X-BugMine-Key": "bmk_nope"}).status_code == 401
+
+    def test_api_keys_never_expose_the_secret(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, _ = two_tenants
+        key = _issue_key(engine, a)
+        body = client.get("/v1/tenant/api-keys", headers={"X-BugMine-Key": key}).json()
+        assert body
+        for row in body:
+            assert key not in str(row), "a key listing leaked a usable secret"
+            assert "secret" not in row
+
+    def test_a_tenant_sees_only_its_own_sources(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, b = two_tenants
+        key_a, key_b = _issue_key(engine, a), _issue_key(engine, b)
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        client.post(
+            "/v1/sources",
+            headers={"X-BugMine-Key": key_a},
+            json={"url": url, "component_ref": "x", "ecosystem": "pypi"},
+        )
+        seen_by_b = client.get("/v1/sources", headers={"X-BugMine-Key": key_b}).json()
+        assert all(s["url"] != url for s in seen_by_b), "tenant B saw tenant A's source"
+
+    def test_a_console_added_source_is_tenant_scoped(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, _ = two_tenants
+        key = _issue_key(engine, a)
+        r = client.post(
+            "/v1/sources",
+            headers={"X-BugMine-Key": key},
+            json={"url": f"https://example.test/{uuid.uuid4().hex[:8]}"},
+        )
+        assert r.json()["scope"] == "tenant", "a console-added source must never be public"

@@ -108,3 +108,54 @@ class CrawlTriggerIn(BaseModel):
 class JobHandleOut(BaseModel):
     task: str
     queued: bool
+
+
+class TenantOut(BaseModel):
+    id: str
+    name: str
+    slug: str
+
+
+class MemberOut(BaseModel):
+    email: str
+    role: str
+    joined_at: datetime
+
+
+class ApiKeyOut(BaseModel):
+    id: str
+    name: str
+    prefix: str
+    principal_kind: str
+    created_at: datetime
+    revoked: bool
+
+
+class SourceOut(BaseModel):
+    id: str
+    url: str
+    subject_domain: SubjectDomain
+    component_ref: str | None
+    ecosystem: str | None
+    scope: PrivacyScope
+    interval_minutes: int
+    enabled: bool
+    last_success_at: datetime | None
+    consecutive_failures: int
+    stale: bool = Field(
+        description="No successful run in several intervals. A dead source produces no errors."
+    )
+
+
+class SourceIn(BaseModel):
+    url: str
+    subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
+    component_ref: str | None = None
+    ecosystem: str | None = None
+    interval_minutes: int = Field(default=1440, ge=15)
+
+
+class WhoAmIOut(BaseModel):
+    tenant: TenantOut
+    principal_kind: str
+    principal_id: str

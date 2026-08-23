@@ -14,19 +14,33 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi import Query as Q
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bugmine import sweep as sweep_mod
 from bugmine import tasks
 from bugmine.api import schemas as S
 from bugmine.api.deps import Principal, anonymous_session, require_principal, tenant_db
 from bugmine.catalog import Query, retrieve
 from bugmine.catalog.reader import current_version
 from bugmine.db import make_engine
-from bugmine.models import BugRecord, BugType, Component, PrivacyScope, SubjectDomain
+from bugmine.models import (
+    ApiKey,
+    BugRecord,
+    BugType,
+    Component,
+    Membership,
+    PrivacyScope,
+    Source,
+    SubjectDomain,
+    Tenant,
+    User,
+)
 
 ECOSYSTEM_DOMAIN = {
     "pypi": SubjectDomain.REPO_LIBRARY,
@@ -224,6 +238,104 @@ def trigger_crawl(body: S.CrawlTriggerIn) -> S.JobHandleOut:
     return S.JobHandleOut(task=name, queued=True)
 
 
+console = APIRouter(prefix="/v1", tags=["console"])
+
+
+@console.get("/whoami", response_model=S.WhoAmIOut)
+def whoami(
+    session: Session = Depends(tenant_db), principal: Principal = Depends(require_principal)
+) -> S.WhoAmIOut:
+    """What this credential is. The console's first call — it establishes the session."""
+    tenant = session.get(Tenant, principal.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail={"error": {"code": "not_found"}})
+    return S.WhoAmIOut(
+        tenant=S.TenantOut(id=str(tenant.id), name=tenant.name, slug=tenant.slug),
+        principal_kind=principal.kind.value,
+        principal_id=str(principal.team_id or principal.user_id),
+    )
+
+
+@console.get("/tenant/members", response_model=list[S.MemberOut])
+def list_members(session: Session = Depends(tenant_db)) -> list[S.MemberOut]:
+    rows = session.execute(select(Membership, User).join(User, User.id == Membership.user_id)).all()
+    return [S.MemberOut(email=u.email, role=m.role.value, joined_at=m.joined_at) for m, u in rows]
+
+
+@console.get("/tenant/api-keys", response_model=list[S.ApiKeyOut])
+def list_api_keys(session: Session = Depends(tenant_db)) -> list[S.ApiKeyOut]:
+    """Never returns the secret — only the prefix, which is not one."""
+    return [
+        S.ApiKeyOut(
+            id=str(k.id),
+            name=k.name,
+            prefix=k.prefix,
+            principal_kind=k.principal_kind.value,
+            created_at=k.created_at,
+            revoked=k.revoked_at is not None,
+        )
+        for k in session.execute(select(ApiKey)).scalars()
+    ]
+
+
+@console.get("/sources", response_model=list[S.SourceOut])
+def list_sources(session: Session = Depends(tenant_db)) -> list[S.SourceOut]:
+    now = datetime.now(UTC)
+    return [
+        S.SourceOut(
+            id=str(src.id),
+            url=src.url,
+            subject_domain=src.subject_domain,
+            component_ref=src.component_ref,
+            ecosystem=src.ecosystem,
+            scope=src.privacy_scope,
+            interval_minutes=src.interval_minutes,
+            enabled=src.enabled,
+            last_success_at=src.last_success_at,
+            consecutive_failures=src.consecutive_failures,
+            stale=src.is_stale(now),
+        )
+        for src in session.execute(select(Source)).scalars()
+    ]
+
+
+@console.post("/sources", response_model=S.SourceOut, status_code=201)
+def create_source(
+    body: S.SourceIn,
+    session: Session = Depends(tenant_db),
+    principal: Principal = Depends(require_principal),
+) -> S.SourceOut:
+    """Add a tenant crawl source.
+
+    Output is `tenant` scope and never reaches public search. The URL is attacker-chosen by
+    definition, so SSRF validation belongs here — it is not implemented yet, which is why
+    tenant ingestion is the last milestone rather than this one.
+    """
+    src = sweep_mod.add_source(
+        session,
+        url=body.url,
+        subject_domain=body.subject_domain,
+        component_ref=body.component_ref,
+        ecosystem=body.ecosystem,
+        interval_minutes=body.interval_minutes,
+        privacy_scope=PrivacyScope.TENANT,
+        tenant_id=principal.tenant_id,
+    )
+    return S.SourceOut(
+        id=str(src.id),
+        url=src.url,
+        subject_domain=src.subject_domain,
+        component_ref=src.component_ref,
+        ecosystem=src.ecosystem,
+        scope=src.privacy_scope,
+        interval_minutes=src.interval_minutes,
+        enabled=src.enabled,
+        last_success_at=None,
+        consecutive_failures=0,
+        stale=False,
+    )
+
+
 def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     app = FastAPI(title="BugMine API", version="1.0.0")
     app.state.engine = engine or make_engine()
@@ -231,6 +343,15 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     app.include_router(catalog)
     app.include_router(check)
     app.include_router(ingest)
+    app.include_router(console)
+
+    # Served by the API rather than as a separate static host. One fewer deployable, and the
+    # console shares an origin with the API so there is no CORS surface to get wrong.
+    _console = Path(__file__).parent / "static" / "console.html"
+
+    @app.get("/console", include_in_schema=False, response_class=HTMLResponse)
+    def console_page() -> str:
+        return _console.read_text()
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
