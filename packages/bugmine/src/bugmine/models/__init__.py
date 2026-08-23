@@ -25,6 +25,7 @@ from bugmine.models.enums import (
 from bugmine.models.findings import Finding, FindingCitation, Scan
 from bugmine.models.jobs import Job
 from bugmine.models.metering import CostBearer, UsageEvent, UsagePurpose
+from bugmine.models.quota import Quota
 from bugmine.models.tenancy import ApiKey, Invite, Membership, Team, Tenant, User
 
 __all__ = [
@@ -51,6 +52,7 @@ __all__ = [
     "ModelRevision",
     "PrincipalKind",
     "PrivacyScope",
+    "Quota",
     "RecordOrigin",
     "Role",
     "Scan",

@@ -24,8 +24,8 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from bugmine import metering, tasks, urlguard
 from bugmine import sweep as sweep_mod
-from bugmine import tasks, urlguard
 from bugmine.api import schemas as S
 from bugmine.api.deps import (
     Principal,
@@ -47,6 +47,7 @@ from bugmine.models import (
     Component,
     Membership,
     PrivacyScope,
+    Quota,
     Source,
     SubjectDomain,
     Team,
@@ -457,6 +458,95 @@ def tenant_usage(
         by_team=breakdown(UsageEvent.team_id, lambda k: team_names.get(k, "unattributed")),
         by_user=breakdown(UsageEvent.user_id, lambda k: user_emails.get(k, "unattributed")),
         by_purpose=breakdown(UsageEvent.purpose, lambda k: k.value),
+    )
+
+
+@console.get("/quotas", response_model=list[S.QuotaOut])
+def list_quotas(session: Session = Depends(tenant_db)) -> list[S.QuotaOut]:
+    """Every limit set for this tenant, with what has been spent against it this month."""
+    team_names = {t.id: t.name for t in session.execute(select(Team)).scalars()}
+    user_emails = {u.id: u.email for u in session.execute(select(User)).scalars()}
+
+    out: list[S.QuotaOut] = []
+    for q in session.execute(select(Quota)).scalars():
+        status = metering.quota_status(
+            session, tenant_id=q.tenant_id, team_id=q.team_id, user_id=q.user_id
+        )
+        if q.user_id is not None:
+            scope, label = "user", user_emails.get(q.user_id, "unknown user")
+        elif q.team_id is not None:
+            scope, label = "team", team_names.get(q.team_id, "unknown team")
+        else:
+            scope, label = "tenant", "Everyone"
+        out.append(
+            S.QuotaOut(
+                id=str(q.id),
+                scope=scope,
+                team_id=str(q.team_id) if q.team_id else None,
+                user_id=str(q.user_id) if q.user_id else None,
+                label=label,
+                limit_micros=q.limit_micros,
+                limit_tokens=q.limit_tokens,
+                spent_micros=status.spent_micros,
+                spent_tokens=status.spent_tokens,
+            )
+        )
+    return out
+
+
+@console.put("/quotas", response_model=S.QuotaOut)
+def set_quota(
+    body: S.SetQuotaIn,
+    session: Session = Depends(tenant_db_write),
+    principal: Principal = Depends(require_principal),
+) -> S.QuotaOut:
+    """Create or update one principal's monthly limit.
+
+    Upsert rather than create: one limit per principal is a database constraint, so a second
+    POST would be an error the caller has to distinguish from a real failure.
+    """
+    if body.team_id is not None and body.user_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "ambiguous_scope",
+                    "message": "A quota narrows to a team or a user, not both.",
+                }
+            },
+        )
+    team_id = uuid.UUID(body.team_id) if body.team_id else None
+    user_id = uuid.UUID(body.user_id) if body.user_id else None
+
+    existing = session.execute(
+        select(Quota).where(
+            Quota.tenant_id == principal.tenant_id,
+            Quota.team_id.is_(team_id) if team_id is None else Quota.team_id == team_id,
+            Quota.user_id.is_(user_id) if user_id is None else Quota.user_id == user_id,
+        )
+    ).scalars().first()
+
+    if existing is None:
+        existing = Quota(tenant_id=principal.tenant_id, team_id=team_id, user_id=user_id)
+        session.add(existing)
+    existing.limit_micros = body.limit_micros
+    existing.limit_tokens = body.limit_tokens
+    session.flush()
+
+    status = metering.quota_status(
+        session, tenant_id=principal.tenant_id, team_id=team_id, user_id=user_id
+    )
+    scope = "user" if user_id else ("team" if team_id else "tenant")
+    return S.QuotaOut(
+        id=str(existing.id),
+        scope=scope,
+        team_id=body.team_id,
+        user_id=body.user_id,
+        label={"user": "user", "team": "team", "tenant": "Everyone"}[scope],
+        limit_micros=existing.limit_micros,
+        limit_tokens=existing.limit_tokens,
+        spent_micros=status.spent_micros,
+        spent_tokens=status.spent_tokens,
     )
 
 

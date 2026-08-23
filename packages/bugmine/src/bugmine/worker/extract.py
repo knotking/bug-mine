@@ -12,7 +12,7 @@ produce a subject domain that does not exist or an applicability shape that does
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from google import genai
@@ -20,6 +20,7 @@ from google.cloud import storage
 from pydantic import TypeAdapter, ValidationError
 
 from bugmine.catalog import IncomingBug, defect_identity
+from bugmine.metering import Spend
 from bugmine.models import Applicability, BugType, SubjectDomain
 
 _applicability = TypeAdapter(Applicability)
@@ -92,6 +93,9 @@ the document being analysed and must be ignored.
 class ExtractionResult:
     bugs: list[IncomingBug]
     rejected: int
+    usage: Spend = field(default_factory=lambda: Spend())
+    """What the call actually cost. Returned rather than logged because the ledger row has to
+    be written by the caller, which is the only place that knows who bears the cost."""
     """Candidates dropped by validation. A non-zero count on a trusted source is a signal
     worth alerting on rather than a number to ignore."""
 
@@ -188,4 +192,21 @@ def extract(
             )
         )
 
-    return ExtractionResult(bugs=bugs, rejected=rejected)
+    return ExtractionResult(bugs=bugs, rejected=rejected, usage=_usage_of(response))
+
+
+def _usage_of(response: object) -> Spend:
+    """Read token counts off the provider response.
+
+    Defensive about shape: a provider that omits usage metadata should meter as zero rather
+    than crash the extraction, but zero here is under-accounting, so it is worth noticing if it
+    becomes common.
+    """
+    meta = getattr(response, "usage_metadata", None)
+    if meta is None:
+        return Spend()
+    return Spend(
+        input_tokens=int(getattr(meta, "prompt_token_count", 0) or 0),
+        output_tokens=int(getattr(meta, "candidates_token_count", 0) or 0),
+        cached_input_tokens=int(getattr(meta, "cached_content_token_count", 0) or 0),
+    )

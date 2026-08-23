@@ -22,9 +22,18 @@ from google import genai
 from google.cloud import storage
 from pydantic import BaseModel
 
+from bugmine import metering
 from bugmine.catalog import write
 from bugmine.db import make_engine, tenant_session
-from bugmine.models import JobState, JobType, PrivacyScope, RecordOrigin, SubjectDomain
+from bugmine.models import (
+    CostBearer,
+    JobState,
+    JobType,
+    PrivacyScope,
+    RecordOrigin,
+    SubjectDomain,
+    UsagePurpose,
+)
 from bugmine.models.jobs import Job
 from bugmine.worker import crawl as crawl_mod
 from bugmine.worker import extract as extract_mod
@@ -135,6 +144,7 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
                 artifact_uri=body.artifact_uri,
             )
             bugs, rejected, engine = parsed.bugs, 0, "structured"
+            usage = metering.Spend()  # the parser spends nothing, and must not appear to
         else:
             result = extract_mod.extract(
                 document,
@@ -146,10 +156,26 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
                 default_component=body.component_ref,
             )
             bugs, rejected, engine = result.bugs, result.rejected, "llm"
+            usage = result.usage
 
         written = 0
         deduped = 0
         with tenant_session(app.state.engine, None) as s:
+            if usage.total:
+                # Written here rather than inside extract(): only the caller knows who bears
+                # the cost, and reading the bearer from the worker would misattribute every
+                # tenant-triggered crawl to the system.
+                job = s.get(Job, job_id)
+                metering.record(
+                    s,
+                    job=job,
+                    spend=usage,
+                    model_id=app.state.model,
+                    purpose=UsagePurpose.EXTRACT,
+                    # Crawling to build the shared catalog is system-borne. A tenant-triggered
+                    # ingestion would pass its tenant here; that path does not exist yet.
+                    cost_bearer=CostBearer.SYSTEM,
+                )
             for bug in bugs:
                 # Scope is decided here, by the job's origin — never by the extractor. Letting
                 # model output choose visibility would put a privacy decision in the code path

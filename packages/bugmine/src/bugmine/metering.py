@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from bugmine.models import CostBearer, UsageEvent, UsagePurpose
+from bugmine.models import CostBearer, Quota, UsageEvent, UsagePurpose
 from bugmine.models.jobs import Job
 
 RATE_CARD_VERSION = "2026-08"
@@ -160,3 +161,143 @@ def spend_by_bearer(session: Session) -> dict[str, int]:
         )
     ).all()
     return {bearer.value: int(total or 0) for bearer, total in rows}
+
+class QuotaExceeded(Exception):
+    """Raised when a principal's monthly limit is already spent.
+
+    Separate from `BudgetExceeded`, which is a per-job ceiling. A job hitting its ceiling is
+    usually a runaway loop; a principal hitting a quota is working as intended and the message
+    has to say so, or an operator debugs a bug that is not there.
+    """
+
+    def __init__(self, scope: str, spent: int, limit: int, unit: str) -> None:
+        super().__init__(
+            f"{scope} quota exhausted: {spent} of {limit} {unit} spent this month."
+        )
+        self.scope = scope
+        self.spent = spent
+        self.limit = limit
+        self.unit = unit
+
+
+@dataclass(frozen=True)
+class QuotaStatus:
+    scope: str
+    """Which principal's limit applies: "user", "team", "tenant", or "none"."""
+    limit_micros: int | None
+    limit_tokens: int | None
+    spent_micros: int
+    spent_tokens: int
+
+    @property
+    def exceeded(self) -> bool:
+        return bool(
+            (self.limit_micros is not None and self.spent_micros >= self.limit_micros)
+            or (self.limit_tokens is not None and self.spent_tokens >= self.limit_tokens)
+        )
+
+
+def month_start(now: datetime | None = None) -> datetime:
+    """The start of the current calendar month, UTC.
+
+    Calendar-aligned rather than rolling: a rolling window makes "how much is left" unanswerable
+    without a query, and a limit nobody can predict is one nobody can plan around.
+    """
+    at = now or datetime.now(UTC)
+    return at.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def resolve_quota(
+    session: Session,
+    *,
+    tenant_id: uuid.UUID,
+    team_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+) -> Quota | None:
+    """Most specific wins: the user's limit, else their team's, else the tenant's.
+
+    A team without its own limit falls back to the tenant's rather than being unbounded — the
+    failure of a missing limit should be restrictive, not permissive.
+    """
+    candidates = session.execute(
+        select(Quota).where(Quota.tenant_id == tenant_id)
+    ).scalars().all()
+    by_key = {(q.team_id, q.user_id): q for q in candidates}
+    if user_id and (found := by_key.get((None, user_id))):
+        return found
+    if team_id and (found := by_key.get((team_id, None))):
+        return found
+    return by_key.get((None, None))
+
+
+def quota_status(
+    session: Session,
+    *,
+    tenant_id: uuid.UUID,
+    team_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    now: datetime | None = None,
+) -> QuotaStatus:
+    """What this principal has spent this month against whichever limit governs it."""
+    quota = resolve_quota(session, tenant_id=tenant_id, team_id=team_id, user_id=user_id)
+    since = month_start(now)
+
+    # Spend is measured at the scope the limit is set at: a team limit counts the whole team's
+    # spend, not only the calling user's, or every member would get the team's allowance each.
+    scope = "none"
+    conditions = [
+        UsageEvent.occurred_at >= since,
+        UsageEvent.cost_bearer == CostBearer.TENANT,
+        UsageEvent.tenant_id == tenant_id,
+    ]
+    if quota is not None:
+        if quota.user_id is not None:
+            scope = "user"
+            conditions.append(UsageEvent.user_id == quota.user_id)
+        elif quota.team_id is not None:
+            scope = "team"
+            conditions.append(UsageEvent.team_id == quota.team_id)
+        else:
+            scope = "tenant"
+
+    spent = session.execute(
+        select(
+            func.coalesce(func.sum(UsageEvent.cost_micros), 0),
+            func.coalesce(
+                func.sum(UsageEvent.input_tokens + UsageEvent.output_tokens), 0
+            ),
+        ).where(*conditions)
+    ).one()
+
+    return QuotaStatus(
+        scope=scope,
+        limit_micros=quota.limit_micros if quota else None,
+        limit_tokens=quota.limit_tokens if quota else None,
+        spent_micros=int(spent[0]),
+        spent_tokens=int(spent[1]),
+    )
+
+
+def check_quota(
+    session: Session,
+    *,
+    tenant_id: uuid.UUID,
+    team_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
+    now: datetime | None = None,
+) -> QuotaStatus:
+    """Raise if the governing limit is already spent. Call before starting billable work.
+
+    Before, not after: the spend that would breach the limit has already happened by the time a
+    call returns, and a check that runs afterwards reports the overage rather than preventing it.
+    """
+    status = quota_status(
+        session, tenant_id=tenant_id, team_id=team_id, user_id=user_id, now=now
+    )
+    if status.exceeded:
+        if status.limit_micros is not None and status.spent_micros >= status.limit_micros:
+            raise QuotaExceeded(status.scope, status.spent_micros, status.limit_micros, "micros")
+        raise QuotaExceeded(
+            status.scope, status.spent_tokens, status.limit_tokens or 0, "tokens"
+        )
+    return status

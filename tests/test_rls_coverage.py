@@ -31,6 +31,9 @@ EXPECTED = {
     "bug_version": "inherits_from_record",
     "source": "scope_based",  # public/subscriber visible to all, like bug_record
     "usage_event": "may_have_no_tenant",  # system-borne spend
+    # A quota always belongs to a tenant — there is no system-borne limit — so it needs none of
+    # the exceptions jobs and usage events carry.
+    "quota": "own_tenant_only",
 }
 
 

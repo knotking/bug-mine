@@ -168,3 +168,47 @@ class TestInvertedRecordsAreRejected:
         result = _run(self._bug("security", None, "4.2.0"))
         assert len(result.bugs) == 1
         assert result.bugs[0].applicability["fixed_in"] == "4.2.0"
+
+
+class TestUsageIsReported:
+    """Extraction has to report what it cost, or nothing downstream can meter it.
+
+    The metering module was fully built and tested while no code path ever called it, so the
+    ledger stayed empty: usage reported zero, and a quota could never trigger because there was
+    no recorded spend to compare against.
+    """
+
+    class _Meta:
+        prompt_token_count = 120
+        candidates_token_count = 45
+        cached_content_token_count = 10
+
+    class _MeteredResponse:
+        text = '{"bugs": []}'
+        usage_metadata = None
+
+    def test_token_counts_are_returned(self) -> None:
+        class _Models:
+            def generate_content(self, **_: object):  # type: ignore[no-untyped-def]
+                response = TestUsageIsReported._MeteredResponse()
+                response.usage_metadata = TestUsageIsReported._Meta()
+                return response
+
+        class _Client:
+            models = _Models()
+
+        result = extract(
+            "irrelevant",
+            genai_client=_Client(),
+            model="fake",
+            subject_domain=SubjectDomain.REPO_LIBRARY,
+            ecosystem="pypi",
+        )
+        assert result.usage.input_tokens == 120
+        assert result.usage.output_tokens == 45
+        assert result.usage.cached_input_tokens == 10
+
+    def test_a_provider_without_usage_metadata_meters_zero_rather_than_crashing(self) -> None:
+        """Under-accounting, but a missing counter must not lose the extraction itself."""
+        result = _run({"bugs": []})
+        assert result.usage.total == 0

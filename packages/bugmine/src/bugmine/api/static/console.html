@@ -119,6 +119,15 @@ tr:last-child td{border-bottom:0}
 .theme svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:640px){.theme{top:8px;right:8px}header{padding-right:112px}}
+.subnav{display:flex;gap:2px;margin:-4px 0 18px;border-bottom:1px solid var(--line);
+  background:none;padding:0;overflow-x:auto}
+.subnav button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 12px 9px;
+  color:var(--dim);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.subnav button[aria-current=true]{color:var(--fg);border-bottom-color:var(--accent);font-weight:550}
+.settings-body h3{font-size:14px;font-weight:600;margin:20px 0 8px}
+.meter{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.meter span{display:block;height:100%;background:var(--accent)}
+.meter span.over{background:var(--security)}
 </style>
 
 <div class="theme" role="group" aria-label="Colour theme">
@@ -160,7 +169,7 @@ const KEY='bugmine.key', TOK='bugmine.idtoken', app=document.getElementById('app
    visible in any client that signs in, and Identity Platform treats it as a project selector
    rather than a credential. */
 const FB_KEY='__FIREBASE_BROWSER_KEY__';
-let S={tab:'catalog', me:null, summary:null};
+let S={tab:'catalog', settings:'usage', usageDays:30, me:null, summary:null};
 
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const when=t=>t?new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'never';
@@ -255,7 +264,10 @@ function signin(msg){
 }
 
 /* ---------------- views ---------------- */
-const TABS={catalog:'Catalog',check:'Check dependencies',sources:'Sources',team:'Team',keys:'API keys'};
+const TABS={catalog:'Catalog',check:'Check dependencies',settings:'Settings'};
+/* Team, keys, sources and usage are configuration, not the product. Kept beside the catalog
+   they made it look like one feature among five, and usage had nowhere to go at all. */
+const SETTINGS={usage:'Usage',team:'Team',keys:'API keys',quotas:'Quotas',sources:'Sources'};
 
 const bugRow=b=>`<div class="row">
   <div class="top"><span class="tag t-${esc(b.bug_type)}">${esc(b.bug_type.replace(/_/g,' '))}</span>
@@ -318,6 +330,62 @@ const VIEWS={
       <table><thead><tr><th>Email</th><th>Role</th><th>Joined</th></tr></thead><tbody>
       ${rows.map(m=>`<tr><td>${esc(m.email)}</td><td><span class="pill">${esc(m.role)}</span></td>
         <td style="color:var(--dim)">${when(m.joined_at)}</td></tr>`).join('')}</tbody></table>`;
+  },
+  async settings(){
+    const sub = Object.entries(SETTINGS).map(([k,l])=>
+      `<button data-s="${k}" aria-current="${S.settings===k}">${l}</button>`).join('');
+    const body = await VIEWS[S.settings]();
+    return `<nav class="subnav">${sub}</nav><div class="settings-body">${body}</div>`;
+  },
+  async usage(){
+    const u=await api(`/v1/usage?days=${S.usageDays}`);
+    const money=m=>'$'+(m/1_000_000).toFixed(4);
+    const num=n=>n.toLocaleString();
+    const table=(title,rows,note)=>rows.length?`<h3>${title}</h3>
+      <table><thead><tr><th>${title}</th><th>Purpose</th><th>Input</th><th>Output</th>
+        <th>Calls</th><th>Failed</th><th>Cost</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr><td>${esc(r.label)}</td><td><span class="pill">${esc(r.purpose)}</span></td>
+        <td class="mono">${num(r.input_tokens)}</td><td class="mono">${num(r.output_tokens)}</td>
+        <td class="mono">${num(r.calls)}</td>
+        <td class="mono">${r.failed_calls?`<span class="pill warn">${r.failed_calls}</span>`:'—'}</td>
+        <td class="mono">${money(r.cost_micros)}</td></tr>`).join('')}</tbody></table>`
+      :`<h3>${title}</h3><div class="sub">${note}</div>`;
+    return `<h2>Usage</h2><div class="sub">Your tenant's own spend. System spend — crawling the
+      world so the catalog exists — is not billed to you and is not shown.</div>
+      <div class="bar"><select id="days">
+        ${[7,30,90,365].map(d=>`<option value="${d}" ${S.usageDays==d?'selected':''}>Last ${d} days</option>`).join('')}
+      </select></div>
+      <div class="stats">
+        <div class="stat"><div class="n">${num(u.input_tokens)}</div><div class="l">input tokens</div></div>
+        <div class="stat"><div class="n">${num(u.output_tokens)}</div><div class="l">output tokens</div></div>
+        <div class="stat"><div class="n">${money(u.cost_micros)}</div><div class="l">cost</div></div>
+      </div>
+      ${table('Purpose',u.by_purpose,'Nothing spent in this window.')}
+      ${table('Team',u.by_team,'No team-attributed spend yet.')}
+      ${table('User',u.by_user,'No user-attributed spend yet.')}`;
+  },
+  async quotas(){
+    const rows=await api('/v1/quotas');
+    const money=m=>m==null?'—':'$'+(m/1_000_000).toFixed(2);
+    const bar=r=>{
+      if(r.limit_micros==null) return '';
+      const pct=Math.min(100,Math.round(100*r.spent_micros/Math.max(1,r.limit_micros)));
+      return `<div class="meter"><span style="width:${pct}%" class="${pct>=100?'over':''}"></span></div>`;
+    };
+    return `<h2>Quotas</h2><div class="sub">Monthly spending limits, per calendar month. Distinct
+      from a job's own ceiling, which stops one runaway extraction — this bounds the bill.
+      The most specific limit applies: a user's, else their team's, else everyone's.</div>
+      ${rows.length?`<table><thead><tr><th>Applies to</th><th>Scope</th><th>Spent</th>
+        <th>Limit</th><th></th></tr></thead><tbody>
+        ${rows.map(r=>`<tr><td>${esc(r.label)}</td><td><span class="pill">${esc(r.scope)}</span></td>
+          <td class="mono">${money(r.spent_micros)}</td><td class="mono">${money(r.limit_micros)}</td>
+          <td style="width:160px">${bar(r)}</td></tr>`).join('')}</tbody></table>`
+        :`<div class="empty"><b>No limits set</b>Spending is unbounded. A limit here caps what
+          can be owed in a month.</div>`}
+      <div class="bar" style="margin-top:14px">
+        <input id="qlimit" type="number" min="0" step="1" placeholder="Limit in dollars, e.g. 25">
+        <button class="btn" id="qset">Set the tenant limit</button>
+      </div>`;
   },
   async keys(){
     const rows=await api('/v1/tenant/api-keys');
@@ -393,9 +461,25 @@ async function render(){
       `<button data-t="${k}" aria-current="${S.tab===k}">${l}</button>`).join('')}</nav>
     <main id="body"><div class="sub">Loading…</div></main>`;
   document.getElementById('out').onclick=()=>{clearCreds();S.me=null;signin();};
-  app.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render();});
+  app.querySelectorAll('nav button[data-t]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render();});
   const body=document.getElementById('body');
-  try{body.innerHTML=await VIEWS[S.tab]();wire();if(S.tab==='catalog')search();}
+  try{
+    body.innerHTML=await VIEWS[S.tab]();
+    wire();
+    if(S.tab==='catalog')search();
+    body.querySelectorAll('.subnav button').forEach(b=>b.onclick=()=>{S.settings=b.dataset.s;render();});
+    const days=document.getElementById('days');
+    if(days)days.onchange=()=>{S.usageDays=Number(days.value);render();};
+    const qset=document.getElementById('qset');
+    if(qset)qset.onclick=async()=>{
+      const dollars=Number(document.getElementById('qlimit').value);
+      if(!Number.isFinite(dollars)||dollars<0)return;
+      /* Entered in dollars, stored in micros: a limit typed as 25 must not become 25 millionths
+         of a dollar because the wire unit leaked into the form. */
+      try{await api('/v1/quotas',{method:'PUT',body:JSON.stringify({limit_micros:Math.round(dollars*1_000_000)})});render();}
+      catch(e){alert(e.message);}
+    };
+  }
   catch(e){body.innerHTML=`<p class="error">${esc(e.message)}</p>`;}
 }
 render();

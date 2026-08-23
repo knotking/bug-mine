@@ -75,3 +75,19 @@ def test_the_header_reserves_room_for_the_fixed_theme_toggle() -> None:
     assert toggle and header, "theme toggle or header padding not found"
     # Toggle is three 28px buttons plus gaps and padding — roughly 100px wide.
     assert int(header.group(1)) >= int(toggle.group(1)) + 100
+
+
+def test_every_settings_view_exists() -> None:
+    """The sub-nav is built from SETTINGS and dispatches through VIEWS. A name in one and not
+    the other renders `undefined is not a function` at click time and nowhere earlier."""
+    source = _source()
+    settings = set(re.findall(r"(\w+):'[^']*'", re.search(r"const SETTINGS=\{([^}]*)\}", source).group(1)))
+    views = set(re.findall(r"^  async (\w+)\(\)\{", source, re.M))
+    assert settings <= views, f"settings screens with no view: {sorted(settings - views)}"
+
+
+def test_every_top_level_tab_exists() -> None:
+    source = _source()
+    tabs = set(re.findall(r"(\w+):'[^']*'", re.search(r"const TABS=\{([^}]*)\}", source).group(1)))
+    views = set(re.findall(r"^  async (\w+)\(\)\{", source, re.M))
+    assert tabs <= views, f"tabs with no view: {sorted(tabs - views)}"

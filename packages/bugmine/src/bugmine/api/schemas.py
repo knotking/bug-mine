@@ -179,6 +179,27 @@ class UsageOut(BaseModel):
     by_purpose: list[UsageLineOut]
 
 
+class QuotaOut(BaseModel):
+    id: str
+    scope: Literal["tenant", "team", "user"]
+    team_id: str | None = None
+    user_id: str | None = None
+    label: str
+    limit_micros: int | None = None
+    limit_tokens: int | None = None
+    spent_micros: int = 0
+    spent_tokens: int = 0
+
+
+class SetQuotaIn(BaseModel):
+    team_id: str | None = None
+    user_id: str | None = None
+    """Both null sets the tenant-wide limit. At most one may be given — a limit narrowing to a
+    team and a user at once has no meaning under most-specific-wins."""
+    limit_micros: int | None = Field(default=None, ge=0)
+    limit_tokens: int | None = Field(default=None, ge=0)
+
+
 class MintKeyIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     team_id: str | None = None
