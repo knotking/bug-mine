@@ -59,7 +59,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;bor
 .error{color:var(--security);font-size:13px;margin-top:10px}
 
 /* ---------- shell ---------- */
-header{display:flex;align-items:center;gap:14px;padding:12px 20px;
+header{display:flex;align-items:center;gap:14px;padding:12px 130px 12px 20px;
   border-bottom:1px solid var(--line);background:var(--panel)}
 header .mark h1{font-size:16px}
 header .spacer{margin-left:auto}
@@ -118,7 +118,7 @@ tr:last-child td{border-bottom:0}
 .theme button[aria-current=true]{background:var(--accent);color:var(--accent-fg)}
 .theme svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round}
-@media(max-width:640px){.theme{top:8px;right:8px}}
+@media(max-width:640px){.theme{top:8px;right:8px}header{padding-right:112px}}
 </style>
 
 <div class="theme" role="group" aria-label="Colour theme">

@@ -61,3 +61,17 @@ def test_dark_palette_is_defined_for_both_the_media_query_and_the_explicit_choic
     assert set(re.findall(r"(--[\w-]+):", media.group(1))) == set(
         re.findall(r"(--[\w-]+):", explicit.group(1))
     )
+
+
+def test_the_header_reserves_room_for_the_fixed_theme_toggle() -> None:
+    """The toggle is `position:fixed` at the top-right with a high z-index, and the header puts
+    the Sign out button in that same corner. Without a reservation the toggle paints over it:
+    the button is present, hit-testable only underneath, and invisible — which is exactly how it
+    was reported, as "no logout button", with nothing in the console to explain it.
+    """
+    source = _source()
+    toggle = re.search(r"\.theme\{[^}]*right:(\d+)px", source)
+    header = re.search(r"header\{[^}]*padding:\s*\d+px\s+(\d+)px", source)
+    assert toggle and header, "theme toggle or header padding not found"
+    # Toggle is three 28px buttons plus gaps and padding — roughly 100px wide.
+    assert int(header.group(1)) >= int(toggle.group(1)) + 100
