@@ -166,6 +166,23 @@ Added 2026-08-22. Scoped to the MVP; self-serve is a later decision, not a rejec
 | **FR-80** | Every API key is bound to exactly one **principal** — a single user or a single team. There are no tenant-wide keys. |
 | **FR-81** | Every authenticated request resolves to a principal, and all usage is attributed to it. |
 
+### Identity and credentials
+
+Added 2026-08-23. See [ADR-0007](../adr/0007-firebase-auth-and-api-gateway.md).
+
+| ID | Requirement |
+| --- | --- |
+| **FR-82** | Users authenticate interactively with **email and password via Firebase**. BugMine never stores or sees a password. |
+| **FR-83** | The API verifies the Firebase ID token's signature and maps its UID to a local user. A valid token for an unknown UID is **an error, not an implicit signup** — accounts come from invitations (FR-77). |
+| **FR-84** | **Every user is issued an API key when their account is created**, bound to them as a principal, so programmatic access needs no second operator-mediated step. |
+| **FR-85** | Programmatic callers reach the API through **API Gateway**, which validates the key and authenticates to the backend as its own identity. |
+| **FR-86** | Human and machine credentials are independently revocable. Ending a session must not break CI; rotating a CI key must not sign anyone out. |
+
+FR-83's refusal to auto-create is the one worth stating explicitly. An identity provider will
+happily mint accounts for anybody who can complete a sign-up form, and treating a valid token as
+sufficient would quietly reintroduce self-serve — which FR-76 exists to prevent, and which the
+whole tenancy model assumes is impossible.
+
 ### What this removes
 
 Invite-only is a large simplification, and most of what it buys is the absence of work:

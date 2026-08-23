@@ -102,12 +102,16 @@ def _check_cross_tenant_isolation(engine) -> list[Check]:  # type: ignore[no-unt
             text("SELECT count(*) FROM job WHERE payload->>'marker' = :m"), {"m": marker}
         ).scalar_one()
 
-    # Clean up. Verification writes to the real database, so leaving fixtures behind means
-    # every run accumulates more — and a production tenant list that fills with `verify-*`
-    # entries is indistinguishable from a data-quality problem when someone finds it later.
+    # Clean up *every* verification fixture, not only this run's.
+    #
+    # Verification writes to the real database. An earlier version of this job had no cleanup
+    # at all, so residue accumulated — and a production tenant list filling with `verify-*`
+    # entries is indistinguishable from a data-quality problem when somebody finds it later.
+    # Sweeping the whole prefix makes the job self-healing rather than merely well-behaved
+    # from now on.
     with tenant_session(engine, None) as s:
         s.execute(text("DELETE FROM job WHERE payload->>'marker' = :m"), {"m": marker})
-        s.execute(text("DELETE FROM tenant WHERE id IN (:a, :b)"), {"a": str(a), "b": str(b)})
+        s.execute(text("DELETE FROM tenant WHERE slug LIKE 'verify-%'"))
 
     with tenant_session(engine, None, commit=False) as s:
         residue = s.execute(

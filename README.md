@@ -62,6 +62,7 @@ still open. Everything else in `docs/` is the detailed version of a section in t
 | [`docs/requirements/record-lifecycle.md`](docs/requirements/record-lifecycle.md) | FR-64 – FR-71 — record states, retraction, bug identity and merging |
 | [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
 | [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
+| [`docs/architecture/auth.md`](docs/architecture/auth.md) | Firebase for people, API Gateway for programs, and how both resolve to one principal |
 | [`docs/architecture/scanner.md`](docs/architecture/scanner.md) | Two engines, dependency graph, reachability, secret redaction at the sandbox boundary |
 | [`docs/architecture/evals.md`](docs/architecture/evals.md) | Eval results as measurements with distributions; regression detection |
 | [`docs/architecture/promotion.md`](docs/architecture/promotion.md) | Candidate → corroboration → sanitization → shared catalog |
@@ -94,6 +95,9 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
   injection is engineered rather than its probability.
 - [ADR-0006](docs/adr/0006-reachability-analysis.md) — **Proposed, not accepted.** Narrow
   candidates with cheap static symbol analysis, then judge the residue with a model.
+- [ADR-0007](docs/adr/0007-firebase-auth-and-api-gateway.md) — Firebase owns passwords, API
+  Gateway owns API keys; the gateway also makes the deployment publicly reachable, which the
+  org policy otherwise prevents.
 
 ## Open
 
