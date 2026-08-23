@@ -472,6 +472,7 @@ def start_scan(
         created_at=scan.created_at,
         grounding_complete=scan.grounding_complete,
         uncovered_components=scan.uncovered_components,
+        unresolved_manifests=0,
         findings=0,
     )
 
@@ -497,6 +498,7 @@ def list_scans(
             created_at=s.created_at,
             grounding_complete=s.grounding_complete,
             uncovered_components=s.uncovered_components,
+            unresolved_manifests=s.unresolved_manifests,
             findings=int(counts.get(s.id, 0)),
         )
         for s in scans

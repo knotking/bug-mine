@@ -179,3 +179,24 @@ class TestAnalyseWorker:
         with tenant_session(engine, tenant, commit=False) as s:
             job = s.get(Job, job_id)
         assert job is not None and job.state is JobState.SUCCEEDED
+
+    def test_a_repo_with_no_lockfile_says_so_rather_than_reporting_clean(
+        self, worker_client, engine: Engine, two_tenants, tmp_path: Path
+    ) -> None:  # type: ignore[no-untyped-def]
+        """An unpinned pyproject yields no versions, deliberately — a range cannot be matched
+        against applicability. But zero findings over unread dependencies looks exactly like
+        zero findings over a clean repository, and FR-39 forbids presenting the second as the
+        first. This is the real shape: httpx declares dependencies and ships no lockfile.
+        """
+        tenant, _ = two_tenants
+        response, scan_id = self._run(
+            worker_client, engine, tenant,
+            {"pyproject.toml": '[project]\nname = "app"\ndependencies = ["scanlib>=2"]\n',
+             "app.py": USES_SYMBOL},
+            tmp_path,
+        )
+        body = response.json()
+        assert body["findings"] == 0
+        assert body["unresolved_manifests"], "an unreadable manifest must be reported"
+        with tenant_session(engine, tenant, commit=False) as s:
+            assert s.get(Scan, scan_id).unresolved_manifests >= 1

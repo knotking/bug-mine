@@ -204,6 +204,7 @@ def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any
             if record is not None:
                 record.commit_sha = body.commit_sha
                 record.uncovered_components = len(outcome.uncovered)
+                record.unresolved_manifests = len(inventory.unresolved)
                 # Every finding is built from a match, so grounding cannot be partial here.
                 record.grounding_complete = True
     except Exception as exc:
@@ -228,6 +229,7 @@ def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any
         # from one that found nothing, and the difference is the entire product claim.
         "suppressed_unreachable": outcome.suppressed,
         "uncovered_components": len(outcome.uncovered),
+        "unresolved_manifests": list(inventory.unresolved),
         "unanalysed_ecosystems": sorted(outcome.unanalysed_ecosystems),
     }
 

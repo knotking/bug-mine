@@ -36,6 +36,10 @@ class Scan(Base):
     looks identical to a clean one, so this must reach the user."""
 
     uncovered_components: Mapped[int] = mapped_column(default=0)
+    unresolved_manifests: Mapped[int] = mapped_column(default=0, server_default="0")
+    """Manifests naming dependencies without pinning them — a `pyproject.toml` with no
+    lockfile. Counted separately because zero findings over unread dependencies looks exactly
+    like zero findings over a clean repository, and they are not the same answer."""
     """FR-39 — components with no catalog coverage. Reported explicitly; silence would read
     as a clean bill of health, which is the most likely way early users are misled."""
 
