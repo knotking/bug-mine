@@ -27,16 +27,32 @@ from sqlalchemy.orm import Session
 from bugmine.catalog import Query, retrieve
 from bugmine.inventory.models import Dependency
 from bugmine.models import BugType, Component, Finding, FindingCitation, SubjectDomain
-from bugmine.reach import Reach, affected_symbols, analyse_python_source
+from bugmine.reach import (
+    Reach,
+    affected_symbols,
+    analyse_javascript_source,
+    analyse_python_source,
+)
 
+# Every ecosystem the catalog holds records for. An ecosystem missing here is reported
+# "not covered" for every dependency in it — even when the catalog has records — because the
+# lookup never happens. That silently hid the whole Java, Go, Android and iOS catalog behind an
+# answer that reads as "we checked and found nothing".
 ECOSYSTEM_DOMAIN = {
     "pypi": SubjectDomain.REPO_LIBRARY,
     "npm": SubjectDomain.REPO_LIBRARY,
+    "maven": SubjectDomain.REPO_LIBRARY,
+    "go": SubjectDomain.REPO_LIBRARY,
+    "swift": SubjectDomain.REPO_LIBRARY,
+    "cargo": SubjectDomain.REPO_LIBRARY,
+    "rubygems": SubjectDomain.REPO_LIBRARY,
+    "nuget": SubjectDomain.REPO_LIBRARY,
+    "packagist": SubjectDomain.REPO_LIBRARY,
 }
 
 # Reachability is implemented per language. An ecosystem absent here is not "clean" — it is
 # unanalysed, and its findings are reported undetermined rather than narrowed away.
-REACHABILITY_SUPPORTED = frozenset({"pypi"})
+REACHABILITY_SUPPORTED = frozenset({"pypi", "npm"})
 
 UNCONFIRMED_REACH_CONFIDENCE = 0.5
 """A finding we could not narrow is worth reporting and worth distinguishing. Halving rather
@@ -85,6 +101,11 @@ def analyse(
     outcome = ScanOutcome()
 
     python_sources = {p: s for p, s in sources.items() if p.endswith(".py")}
+    js_sources = {
+        p: s
+        for p, s in sources.items()
+        if p.endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"))
+    }
 
     for dependency in dependencies:
         domain = ECOSYSTEM_DOMAIN.get(dependency.ecosystem)
@@ -104,7 +125,7 @@ def analyse(
             continue
 
         for match in matches:
-            reach = _reachability(dependency, match, python_sources, outcome)
+            reach = _reachability(dependency, match, python_sources, js_sources, outcome)
             if reach.suppressible:
                 # The whole point: a known defect in a dependency this project never calls.
                 outcome.suppressed += 1
@@ -138,19 +159,23 @@ def _reachability(
     dependency: Dependency,
     match: object,
     python_sources: dict[str, str],
+    js_sources: dict[str, str],
     outcome: ScanOutcome,
 ) -> Reach:
     if dependency.ecosystem not in REACHABILITY_SUPPORTED:
         outcome.unanalysed_ecosystems.add(dependency.ecosystem)
         return Reach.unknown(f"reachability is not implemented for {dependency.ecosystem}")
-    if not python_sources:
-        return Reach.unknown("no source was provided to analyse")
+
+    files = python_sources if dependency.ecosystem == "pypi" else js_sources
+    if not files:
+        # Source of the right language is absent — a gap in what we were given, not evidence
+        # the dependency is untouched.
+        return Reach.unknown(f"no {dependency.ecosystem} source was provided to analyse")
 
     version = match.version  # type: ignore[attr-defined]
     symbols = affected_symbols(version.title, version.description)
-    return analyse_python_source(
-        python_sources, component=dependency.name, symbols=symbols
-    )
+    analyse = analyse_python_source if dependency.ecosystem == "pypi" else analyse_javascript_source
+    return analyse(files, component=dependency.name, symbols=symbols)
 
 
 def _detail(reach: Reach) -> str:

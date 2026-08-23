@@ -149,18 +149,22 @@ class TestCoverage:
         assert outcome.findings == []
 
     def test_an_unanalysable_ecosystem_is_named(self, engine: Engine, scan_id) -> None:  # type: ignore[no-untyped-def]
+        """Maven, not npm: npm has reachability now, and an ecosystem without it must still be
+        named rather than silently reported as undetermined with no explanation."""
         _seed(
             engine,
             title="Remove support for `eval_type_backport()`",
-            ref="npm-only-widget",
-            ecosystem="npm",
+            ref="jvm-only-widget",
+            ecosystem="maven",
         )
         with tenant_session(engine, None) as s:
             outcome = analyse(
                 s,
                 scan_id=scan_id,
-                dependencies=[Dependency(ecosystem="npm", name="npm-only-widget", version="2.5.0")],
+                dependencies=[
+                    Dependency(ecosystem="maven", name="jvm-only-widget", version="2.5.0")
+                ],
                 sources={"app.py": USES_SYMBOL},
             )
-        assert outcome.unanalysed_ecosystems == {"npm"}
+        assert outcome.unanalysed_ecosystems == {"maven"}
         assert outcome.findings[0].reachable is None

@@ -145,7 +145,9 @@ class TestCheckDependencies:
         key = _issue_key(engine, a)
         r = client.post(
             "/v1/check/dependencies",
-            json={"dependencies": [{"ecosystem": "cargo", "name": "serde", "version": "1.0"}]},
+            # An ecosystem the catalog genuinely has no records for. cargo, maven, go and swift
+            # are supported now, and using one of those would test nothing.
+            json={"dependencies": [{"ecosystem": "cpan", "name": "Moose", "version": "2.2"}]},
             headers={"Authorization": f"Bearer {key}"},
         )
         assert r.json()["not_covered"][0]["reason"] == "ecosystem_unsupported"

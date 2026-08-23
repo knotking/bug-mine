@@ -25,6 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bugmine import metering, tasks, urlguard
+from bugmine import scan as scan_mod
 from bugmine import sweep as sweep_mod
 from bugmine.api import schemas as S
 from bugmine.api.deps import (
@@ -61,10 +62,9 @@ from bugmine.models import (
 )
 from bugmine.models.metering import CostBearer, UsageEvent
 
-ECOSYSTEM_DOMAIN = {
-    "pypi": SubjectDomain.REPO_LIBRARY,
-    "npm": SubjectDomain.REPO_LIBRARY,
-}
+# Kept in step with bugmine.scan.ECOSYSTEM_DOMAIN: an ecosystem missing from either is
+# reported "not covered" regardless of what the catalog holds.
+ECOSYSTEM_DOMAIN = dict(scan_mod.ECOSYSTEM_DOMAIN)
 
 
 def _bug_out(session: Session, record: BugRecord) -> S.BugOut | None:
