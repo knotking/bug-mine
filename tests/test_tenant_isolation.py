@@ -200,3 +200,42 @@ class TestScopeInvariant:
             s.commit()
         assert isinstance(exc.value.__cause__, psycopg.errors.CheckViolation)
         assert "tenant_scope_requires_tenant" in str(exc.value)
+
+
+class TestSystemJobs:
+    """Jobs with no tenant — global crawls and backfills.
+
+    The cost bearer for these is the system, not a customer, so `tenant_id` is null. The
+    policy has to permit that without making operational activity visible to tenants.
+    """
+
+    def test_a_system_job_can_be_written_without_a_tenant(self, engine: Engine) -> None:
+        with tenant_session(engine, None) as s:
+            s.add(Job(job_type=JobType.CRAWL, tenant_id=None, payload={"url": "https://x.test"}))
+
+    def test_a_tenant_cannot_see_system_jobs(
+        self, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, _ = two_tenants
+        marker = uuid.uuid4().hex
+        with tenant_session(engine, None) as s:
+            s.add(Job(job_type=JobType.CRAWL, tenant_id=None, payload={"marker": marker}))
+        with tenant_session(engine, a) as s:
+            found = [
+                j
+                for j in s.execute(select(Job)).scalars().all()
+                if j.payload.get("marker") == marker
+            ]
+        assert found == [], "a tenant enumerated system operational activity"
+
+    def test_the_system_can_see_its_own_jobs(self, engine: Engine) -> None:
+        marker = uuid.uuid4().hex
+        with tenant_session(engine, None) as s:
+            s.add(Job(job_type=JobType.CRAWL, tenant_id=None, payload={"marker": marker}))
+        with tenant_session(engine, None) as s:
+            found = [
+                j
+                for j in s.execute(select(Job)).scalars().all()
+                if j.payload.get("marker") == marker
+            ]
+        assert len(found) == 1
