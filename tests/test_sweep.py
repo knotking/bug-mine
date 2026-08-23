@@ -25,11 +25,16 @@ def _url() -> str:
 
 class TestDueness:
     def test_a_never_run_source_is_due(self, engine: Engine) -> None:
+        url = _url()
         with tenant_session(engine, None) as s:
-            src = add_source(s, url=_url(), subject_domain=SubjectDomain.REPO_LIBRARY)
+            src = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
             calls: list[dict] = []
             r = sweep(s, calls.append, now=NOW)
-        assert r.enqueued == 1 and len(calls) == 1
+        # Asserted against this source rather than a global count: sources persist across tests
+        # in a run, so "exactly one was due" is a claim about execution order, not about
+        # dueness.
+        assert url in [c["url"] for c in calls]
+        assert r.enqueued >= 1
         assert src.last_attempt_at == NOW
 
     def test_a_recently_run_source_is_not_due(self, engine: Engine) -> None:
