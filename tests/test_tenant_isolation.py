@@ -55,12 +55,24 @@ class TestJobIsolation:
     def test_anonymous_session_sees_no_tenant_jobs(
         self, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
     ) -> None:
-        """The public path. RLS makes this true without any handler-side filter."""
+        """The public path. RLS makes this true without any handler-side filter.
+
+        Asserted against a marker rather than an empty result: system-borne jobs legitimately
+        have no tenant and *are* visible here, so an empty-list assertion would conflate "no
+        tenant data leaked" with "no rows at all" and break as soon as anything else writes a
+        system job.
+        """
         a, _ = two_tenants
+        marker = uuid.uuid4().hex
         with tenant_session(engine, a) as s:
-            s.add(Job(job_type=JobType.NOOP, tenant_id=a, payload={}))
+            s.add(Job(job_type=JobType.NOOP, tenant_id=a, payload={"marker": marker}))
         with tenant_session(engine, None) as s:
-            assert s.execute(select(Job)).scalars().all() == []
+            leaked = [
+                j
+                for j in s.execute(select(Job)).scalars().all()
+                if j.payload.get("marker") == marker
+            ]
+        assert leaked == [], "a tenant's job was visible to an anonymous session"
 
 
 class TestCatalogScope:
