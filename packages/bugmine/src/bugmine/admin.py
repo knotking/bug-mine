@@ -261,6 +261,53 @@ def record_retract(args: argparse.Namespace) -> int:
     return 0
 
 
+def source_list(args: argparse.Namespace) -> int:
+    """Sources by scope, with duplicates surfaced.
+
+    Duplicates are worth a first-class report rather than a query: a source registered twice is
+    crawled twice, which spends the rate-limit budget that decides how much of the catalog gets
+    refreshed in an hour.
+    """
+    from collections import Counter
+
+    from bugmine.models import Source
+
+    with tenant_session(_engine(), None, commit=False) as s:
+        rows = s.execute(select(Source)).scalars().all()
+        by_scope = Counter(r.privacy_scope.value for r in rows)
+        by_url = Counter(r.url for r in rows)
+        duplicated = {u: c for u, c in by_url.items() if c > 1}
+        print(f"  {len(rows)} source(s) visible without a tenant context")
+        for scope, count in sorted(by_scope.items()):
+            print(f"    {scope:<10} {count}")
+        print(f"  {len(duplicated)} url(s) registered more than once")
+        for url, count in list(duplicated.items())[: args.limit]:
+            print(f"    x{count}  {url[:88]}")
+    return 0
+
+
+def source_prune(args: argparse.Namespace) -> int:
+    """Remove duplicate registrations, keeping the oldest of each URL.
+
+    The oldest rather than the newest: it carries whatever crawl history exists, and dropping it
+    would reset `last_success_at` and make a healthy source look like it had never run.
+    """
+    from bugmine.models import Source
+
+    removed = 0
+    with tenant_session(_engine(), None) as s:
+        rows = s.execute(select(Source).order_by(Source.created_at.asc())).scalars().all()
+        seen: set[str] = set()
+        for row in rows:
+            if row.url in seen:
+                s.delete(row)
+                removed += 1
+                continue
+            seen.add(row.url)
+    print(f"  removed {removed} duplicate source(s); {len(seen)} unique url(s) remain")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bugmine-admin", description="BugMine operator tools.")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -300,6 +347,13 @@ def main(argv: list[str] | None = None) -> int:
     jr = j.add_parser("recent", help="Recent jobs and their failure reasons")
     jr.add_argument("--limit", type=int, default=15)
     jr.set_defaults(func=job_recent)
+
+    src = sub.add_parser("source").add_subparsers(dest="cmd", required=True)
+    sl = src.add_parser("list", help="Sources by scope, with duplicates")
+    sl.add_argument("--limit", type=int, default=10)
+    sl.set_defaults(func=source_list)
+    sp = src.add_parser("prune", help="Remove duplicate registrations of the same url")
+    sp.set_defaults(func=source_prune)
 
     rec = sub.add_parser("record").add_subparsers(dest="cmd", required=True)
     rl = rec.add_parser("list", help="Catalog records, including retracted ones")
