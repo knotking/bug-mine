@@ -11,12 +11,13 @@ carried over from that contract:
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi import Query as Q
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
@@ -28,7 +29,7 @@ from bugmine.api import schemas as S
 from bugmine.api.deps import Principal, anonymous_session, require_principal, tenant_db
 from bugmine.catalog import Query, retrieve
 from bugmine.catalog.reader import current_version
-from bugmine.db import make_engine
+from bugmine.db import make_engine, tenant_session
 from bugmine.models import (
     ApiKey,
     BugRecord,
@@ -188,6 +189,8 @@ def check_dependencies(
     return S.DependencyCheckOut(matches=matches, not_covered=not_covered, checked_at=now)
 
 
+logger = logging.getLogger("bugmine.api")
+
 ingest = APIRouter(prefix="/v1/admin/ingest", tags=["admin"])
 
 
@@ -217,6 +220,30 @@ def _require_operator(
             status_code=401,
             detail={"error": {"code": "unauthenticated", "message": "Operator token required."}},
         )
+
+
+@ingest.post("/sweep", dependencies=[Depends(_require_operator)])
+def trigger_sweep(request: Request) -> dict[str, object]:
+    """Enqueue every source that is due. Called by Cloud Scheduler on a cron.
+
+    The sweep marks each source attempted; the crawl worker marks it succeeded. Keeping those
+    separate is what makes staleness detectable — a source that enqueues on schedule and always
+    fails would otherwise look permanently healthy, and that failure emits no errors at all.
+    """
+    with tenant_session(request.app.state.engine, None) as session:
+        result = sweep_mod.sweep(
+            session, lambda payload: tasks.enqueue(tasks.crawl_target(), payload)
+        )
+    if result.stale:
+        # Absence of success is the only signal a dead source produces. Logged at warning so it
+        # can be alerted on without inventing a metric.
+        logger.warning("stale crawl sources: %s", ", ".join(result.stale))
+    return {
+        "considered": result.considered,
+        "due": result.due,
+        "enqueued": result.enqueued,
+        "stale": result.stale,
+    }
 
 
 @ingest.post("/crawl", dependencies=[Depends(_require_operator)])

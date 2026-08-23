@@ -279,3 +279,66 @@ class TestConsole:
             json={"url": f"https://example.test/{uuid.uuid4().hex[:8]}"},
         )
         assert r.json()["scope"] == "tenant", "a console-added source must never be public"
+
+
+class TestSweepTrigger:
+    """The scheduled sweep endpoint.
+
+    Gated by the operator token rather than a tenant key: a sweep enqueues crawls, and a crawl
+    fetches an arbitrary URL with our egress. No customer credential should be able to start one.
+    """
+
+    def test_it_requires_the_operator_token(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BUGMINE_OPERATOR_TOKEN", "secret")
+        assert client.post("/v1/admin/ingest/sweep").status_code == 401
+        assert (
+            client.post(
+                "/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "wrong"}
+            ).status_code
+            == 401
+        )
+
+    def test_it_reports_what_it_enqueued(
+        self, client: TestClient, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BUGMINE_OPERATOR_TOKEN", "secret")
+        sent: list[dict] = []
+        monkeypatch.setattr("bugmine.tasks.enqueue", lambda target, payload: sent.append(payload))
+        monkeypatch.setattr("bugmine.tasks.crawl_target", lambda: None)
+
+        from bugmine.db import tenant_session
+        from bugmine.models import SubjectDomain
+        from bugmine.sweep import add_source
+
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        with tenant_session(engine, None) as s:
+            add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+
+        body = client.post(
+            "/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "secret"}
+        ).json()
+        assert body["enqueued"] >= 1
+        assert any(p["url"] == url for p in sent)
+
+    def test_sweeping_twice_enqueues_once(
+        self, client: TestClient, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A scheduler that double-fires must not double-crawl."""
+        monkeypatch.setenv("BUGMINE_OPERATOR_TOKEN", "secret")
+        sent: list[dict] = []
+        monkeypatch.setattr("bugmine.tasks.enqueue", lambda target, payload: sent.append(payload))
+        monkeypatch.setattr("bugmine.tasks.crawl_target", lambda: None)
+
+        from bugmine.db import tenant_session
+        from bugmine.models import SubjectDomain
+        from bugmine.sweep import add_source
+
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        with tenant_session(engine, None) as s:
+            add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+
+        client.post("/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "secret"})
+        client.post("/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "secret"})
+        assert sum(1 for p in sent if p["url"] == url) == 1
