@@ -104,6 +104,59 @@ request payload, not by reading the code that builds it.
 
 ---
 
+## Results — 2026-08-23
+
+| Stage | Outcome |
+| :-: | --- |
+| **0** Preconditions | **Pass** |
+| **1** Isolation in Cloud SQL | **Pass 14/14** — `rolsuper=False`, `rolbypassrls=False`, cross-tenant reads 0 rows |
+| **2** Ingestion | **Pass 4/4** — 3 real records from two crawls, dedup confirmed |
+| **3** Retrieval | **Blocked** — see below |
+| **4** Client path | **Blocked** by the same cause |
+| **5** Boundaries | Spot-checked: no public IP, egress denies present, IAM split correct |
+
+### Stage 3 is blocked by a header collision, not by the code
+
+Cloud Run consumes the `Authorization` header for its own IAM check. The tenant API key uses
+the same header. Both cannot be present, so no authenticated route is reachable from outside
+this deployment.
+
+This only arises because `constraints/iam.allowedPolicyMemberDomains` forbids granting
+`run.invoker` to `allUsers`, which forces every request to carry a Google identity token. In a
+deployment where the service is anonymously invokable and the application does its own
+authentication — which is the design and what the OpenAPI contract specifies — there is no
+conflict.
+
+Resolution, best first:
+
+1. **An org-policy exception for `bugmine-dev`.** The app's auth then works exactly as
+   specified, and nothing in the contract changes.
+2. **Move API keys to a custom header**, as the operator token already does. Works, but
+   diverges from the contract and from standard practice, and would be undone under option 1.
+3. **A load balancer in front**, with the service kept internal.
+
+Noted honestly: the same collision was hit and fixed for the operator token earlier in the
+session, and the fix was applied only to the endpoint in hand rather than recognised as
+applying to every authenticated route.
+
+### Defects this run surfaced
+
+Eight, none of which any unit test caught, all requiring the deployed environment:
+
+| # | Defect |
+| :-: | --- |
+| 1 | Cloud Tasks queue IDs reject underscores |
+| 2 | Cloud SQL defaults to ENTERPRISE_PLUS, rejecting the intended tier |
+| 3 | `uv.lock` gitignored, so absent from the build context |
+| 4 | BuildKit cache mounts unsupported by the Cloud Build docker builder |
+| 5 | Alembic routing the URL through configparser, which treats `%` as interpolation |
+| 6 | RLS refusing system-borne jobs, which legitimately have no tenant |
+| 7 | Workers swallowing exceptions, making a live failure undiagnosable |
+| 8 | Truncation at artifact read corrupting structured documents |
+
+Defects 6, 7 and 8 were self-inflicted. The RLS class is now caught structurally by
+`tests/test_rls_coverage.py`; the other two are covered by regression tests.
+
 ## Known to be out of scope
 
 - **Public anonymous access** — blocked by the org policy on `allUsers`; tested with an
