@@ -46,7 +46,7 @@ class TestDueness:
             # and the difference is what decides whether a retry is owed.
             src.last_success_at = NOW - timedelta(minutes=10)
             calls: list[dict] = []
-            r = sweep(s, calls.append, now=NOW)
+            sweep(s, calls.append, now=NOW)
         assert url not in [c["url"] for c in calls], "a healthy source inside its interval ran"
 
     def test_a_source_whose_attempt_failed_retries_before_its_interval(
