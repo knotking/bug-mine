@@ -21,6 +21,10 @@ resource "google_sql_database_instance" "main" {
   deletion_protection = true
 
   settings {
+    # Explicit, because the default is ENTERPRISE_PLUS, which rejects db-custom-* tiers and
+    # requires the substantially more expensive db-perf-optimized-* machines. Defaulting here
+    # would have quietly multiplied the database bill.
+    edition           = "ENTERPRISE"
     tier              = var.db_tier
     availability_type = var.db_ha ? "REGIONAL" : "ZONAL"
     disk_size         = 100
