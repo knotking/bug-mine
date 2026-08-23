@@ -23,6 +23,7 @@ from bugmine.models.enums import (
 )
 from bugmine.models.findings import Finding, FindingCitation, Scan
 from bugmine.models.jobs import Job
+from bugmine.models.metering import CostBearer, UsageEvent, UsagePurpose
 from bugmine.models.tenancy import ApiKey, Invite, Membership, Team, Tenant, User
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "BuildRange",
     "Component",
     "ComponentAlias",
+    "CostBearer",
     "Finding",
     "FindingCitation",
     "Invite",
@@ -55,6 +57,8 @@ __all__ = [
     "Team",
     "Tenant",
     "TimeWindow",
+    "UsageEvent",
+    "UsagePurpose",
     "User",
     "VersionRange",
 ]
