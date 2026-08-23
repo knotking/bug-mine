@@ -117,3 +117,13 @@ def test_every_top_level_tab_exists() -> None:
     tabs = set(re.findall(r"(\w+):'[^']*'", block))
     views = set(re.findall(r"^  async (\w+)\(\)\{", source, re.M))
     assert tabs <= views, f"tabs with no view: {sorted(tabs - views)}"
+
+
+def test_every_landing_tab_has_a_panel() -> None:
+    """The nav is built from LAND and dispatches through PANELS. A name in one and not the other
+    renders an empty page on click, with nothing thrown to say why."""
+    source = _source()
+    block = re.search(r"const LAND = \{([^}]*)\}", source).group(1)
+    land = set(re.findall(r"(\w+):'[^']*'", block))
+    panels = set(re.findall(r"^  (\w+): \(\) =>", source, re.M))
+    assert land <= panels, f"landing tabs with no panel: {sorted(land - panels)}"

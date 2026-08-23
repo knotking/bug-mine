@@ -154,6 +154,39 @@ def public_stats(session: Session = Depends(anonymous_session)) -> dict[str, obj
     }
 
 
+@public.get("/components")
+def public_components(
+    session: Session = Depends(anonymous_session),
+    limit: int = Q(default=60, ge=1, le=200),
+) -> list[dict[str, object]]:
+    """What the catalog actually covers, most-covered first.
+
+    Coverage is the honest answer to "is BugMine any use to me" — a visitor can see whether the
+    things they depend on are in here before asking for an account, rather than being told a
+    total and left to guess whether it includes anything of theirs.
+    """
+    rows = session.execute(
+        select(
+            Component.canonical_ref,
+            Component.ecosystem,
+            BugRecord.subject_domain,
+            func.count(BugRecord.id),
+        )
+        .join(BugRecord, BugRecord.component_id == Component.id)
+        .where(
+            BugRecord.privacy_scope == PrivacyScope.PUBLIC,
+            BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES),
+        )
+        .group_by(Component.canonical_ref, Component.ecosystem, BugRecord.subject_domain)
+        .order_by(func.count(BugRecord.id).desc())
+        .limit(limit)
+    ).all()
+    return [
+        {"ref": ref, "ecosystem": eco, "subject_domain": domain.value, "records": int(n)}
+        for ref, eco, domain, n in rows
+    ]
+
+
 catalog = APIRouter(prefix="/v1", tags=["catalog"])
 
 
@@ -884,9 +917,14 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     # console shares an origin with the API so there is no CORS surface to get wrong.
     _console = Path(__file__).parent / "static" / "console.html"
 
+    @app.get("/", include_in_schema=False, response_class=HTMLResponse)
     @app.get("/console", include_in_schema=False, response_class=HTMLResponse)
     def console_page(response: Response) -> str:
-        """Serve the console with its Firebase project key substituted in.
+        """Serve the app at the root, and at /console for links that already exist.
+
+        One document serves both: signed out it is the landing page, signed in it is the
+        console. Splitting them would mean two pages to keep in step, and the root 404'd
+        entirely until now — a landing page nobody could reach without knowing an internal path.
 
         Injected rather than committed so the same image serves any environment, and read at
         request time so rotating the key does not need a rebuild. The key is not a secret —

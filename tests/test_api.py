@@ -694,3 +694,15 @@ class TestPublicStats:
                 tenant_id=tenant,
             )
         assert client.get("/v1/public/stats").json()["records"] == before
+
+
+class TestRootServesTheApp:
+    def test_the_root_is_the_landing_page(self, client: TestClient) -> None:
+        """It 404'd until now, so the landing page was only reachable at an internal path that
+        nobody would guess."""
+        r = client.get("/")
+        assert r.status_code == 200
+        assert "BugMine" in r.text
+
+    def test_console_still_works_for_existing_links(self, client: TestClient) -> None:
+        assert client.get("/console").status_code == 200

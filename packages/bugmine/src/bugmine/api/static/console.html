@@ -215,6 +215,33 @@ h2{font-size:19px;letter-spacing:-.015em;font-weight:650;margin-bottom:3px}
 }
 /* ---------- landing: full page, search first ---------- */
 .land{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow-x:hidden}
+.navtabs{display:flex;gap:2px;margin-left:26px}
+.navtabs button{background:none;border:0;border-bottom:2px solid transparent;
+  padding:8px 13px 9px;color:var(--dim);font:inherit;font-size:13.5px;cursor:pointer;
+  white-space:nowrap;transition:color .12s ease,border-color .12s ease}
+.navtabs button:hover{color:var(--fg)}
+.navtabs button[aria-current=true]{color:var(--accent);border-bottom-color:var(--accent);
+  font-weight:600}
+@media(max-width:760px){.navtabs{display:none}}
+.panel{max-width:880px;margin:0 auto;text-align:left}
+.panel h2{margin-bottom:6px}
+.covergrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;
+  margin-top:16px}
+.cov{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:10px 13px;
+  border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:13px}
+.cov .r{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cov .n{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+.steps{display:grid;gap:12px;margin-top:18px}
+.step{display:grid;grid-template-columns:30px 1fr;gap:13px;align-items:start;padding:14px 16px;
+  border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.step .i{width:26px;height:26px;border-radius:8px;background:var(--accent-soft);
+  color:var(--accent-dim);display:grid;place-items:center;font-size:12.5px;font-weight:700}
+.step b{display:block;margin-bottom:3px;font-size:14px}
+.step p{color:var(--dim);font-size:13.2px;line-height:1.5;margin:0}
+pre.code{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:13px 15px;overflow-x:auto;font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+  color:var(--fg);margin:10px 0 18px}
+pre.code .m{color:var(--accent-dim);font-weight:600}
 .topbar{display:flex;align-items:center;gap:14px;
   padding:18px clamp(130px,4vw + 112px,150px) 18px clamp(18px,4vw,44px);
   position:relative;z-index:30}
@@ -366,43 +393,95 @@ async function api(path,opts={}){
 const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
   stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>`;
 
+const LAND = {search:'Search', coverage:'Coverage', how:'How it works', api:'API'};
+const L = {tab:'search'};
+let hits=[], filter='all', lastQ='';
+
+const PANELS = {
+  search: () => `
+    <span class="eyebrow"><span class="dot"></span>Catalog live and crawling</span>
+    <h1 class="hero">Every dependency breaks.<br><em>Know which ones break you.</em></h1>
+    <p class="lede">Breaking changes, deprecations and regressions across everything you depend
+      on — most of which never get a CVE. Search the catalog; no account needed.</p>
+    <div class="bigsearch">
+      ${MAG}
+      <input id="pq" placeholder="Search a package — numpy, sqlalchemy, kafka…"
+             autocomplete="off" autofocus>
+      <button class="go" id="pgo">Search</button>
+    </div>
+    <div class="chips">
+      ${['numpy','sqlalchemy','requests','httpx','pytest','django','kafka'].map(c=>
+        `<button class="chip" data-q="${c}">${c}</button>`).join('')}
+    </div>
+    <div class="tabs" id="ptabs" hidden></div>
+    <div class="results" id="pout"></div>
+    <div class="figures" id="figs">
+      <div class="fig"><div class="v">—</div><div class="k">records</div></div>
+      <div class="fig"><div class="v">—</div><div class="k">components</div></div>
+      <div class="fig"><div class="v">—</div><div class="k">beyond CVEs</div></div>
+    </div>`,
+
+  coverage: () => `
+    <div class="panel">
+      <h2>What the catalog covers</h2>
+      <p class="sub">Most-covered first. A component absent here is one we know nothing about —
+        which is not the same as one with nothing wrong.</p>
+      <div class="covergrid" id="cov">${SKELETON}</div>
+    </div>`,
+
+  how: () => `
+    <div class="panel">
+      <h2>How it works</h2>
+      <p class="sub">Four stages. The third is the one other tools skip, and the reason a
+        BugMine report is shorter than a dependency scanner's.</p>
+      <div class="steps">
+        <div class="step"><span class="i">1</span><div><b>Crawl</b>
+          <p>Release notes and changelogs from 115 projects. A worker with network access and no
+            model, because the pages it fetches are written by whoever controls them.</p></div></div>
+        <div class="step"><span class="i">2</span><div><b>Extract</b>
+          <p>Structured feeds are parsed deterministically — the version is declared, so a parser
+            beats a model. Prose changelogs go to a model with no network access. Every record
+            records whether the release <em>introduced</em> the defect or <em>fixed</em> it.</p></div></div>
+        <div class="step"><span class="i">3</span><div><b>Reach</b>
+          <p>A known defect in a package you never call is suppressed, not reported. Imports and
+            symbols are resolved through aliases; anything undetermined is reported with lower
+            confidence rather than hidden.</p></div></div>
+        <div class="step"><span class="i">4</span><div><b>Cite</b>
+          <p>Every finding names the record that grounds it. Components with no coverage are
+            listed as not covered, because an empty result reads as healthy and is not.</p></div></div>
+      </div>
+    </div>`,
+
+  api: () => `
+    <div class="panel">
+      <h2>Public API</h2>
+      <p class="sub">These need no credential. Everything else is per-tenant and needs a key.</p>
+      <pre class="code"><span class="m">GET</span> /v1/public/bugs/search?q=sqlalchemy&amp;limit=20
+<span class="m">GET</span> /v1/public/components
+<span class="m">GET</span> /v1/public/stats</pre>
+      <p class="sub">With an account, the same catalog answers questions about your own code:</p>
+      <pre class="code"><span class="m">POST</span> /v1/check/dependencies   <span style="color:var(--faint)"># names and versions only — source never leaves your machine</span>
+<span class="m">POST</span> /v1/scans                <span style="color:var(--faint)"># server-side, with reachability</span>
+<span class="m">GET</span>  /v1/scans/{id}/findings  <span style="color:var(--faint)"># each finding cites its record</span></pre>
+    </div>`,
+};
+
 function signin(msg){
   app.innerHTML=`<div class="land">
     <div class="auth-grid"></div>
 
     <div class="topbar">
       <div class="mark">${LOGO}<h1>BugMine</h1></div>
+      <nav class="navtabs" id="ltabs">
+        ${Object.entries(LAND).map(([k,l])=>
+          `<button data-l="${k}" aria-current="${L.tab===k}">${l}</button>`).join('')}
+      </nav>
       <span class="spacer"></span>
       <button class="btn" id="open-signin" style="width:auto;padding:9px 18px">Sign in</button>
     </div>
 
     <div class="stage">
-      <div class="hero-wrap">
-        <span class="eyebrow"><span class="dot"></span>Catalog live and crawling</span>
-        <h1 class="hero">Every dependency breaks.<br><em>Know which ones break you.</em></h1>
-        <p class="lede">Breaking changes, deprecations and regressions across everything you
-          depend on — most of which never get a CVE. Search the catalog; no account needed.</p>
-
-        <div class="bigsearch">
-          ${MAG}
-          <input id="pq" placeholder="Search a package — numpy, sqlalchemy, kafka…"
-                 autocomplete="off" autofocus>
-          <button class="go" id="pgo">Search</button>
-        </div>
-        <div class="chips">
-          ${['numpy','sqlalchemy','requests','httpx','pytest','django','kafka'].map(c=>
-            `<button class="chip" data-q="${c}">${c}</button>`).join('')}
-        </div>
-
-        <div class="tabs" id="ptabs" hidden></div>
-        <div class="results" id="pout"></div>
-
-        <div class="figures" id="figs">
-          <div class="fig"><div class="v">—</div><div class="k">records</div></div>
-          <div class="fig"><div class="v">—</div><div class="k">components</div></div>
-          <div class="fig"><div class="v">—</div><div class="k">beyond CVEs</div></div>
-        </div>
-      </div>
+      <div class="hero-wrap" id="stage-body"></div>
     </div>
 
     <div class="sheet" id="sheet" hidden>
@@ -428,6 +507,49 @@ function signin(msg){
     </div>
   </div>`;
 
+  // One place that draws the active panel and rebinds its handlers. Rebinding matters: the
+  // panel is replaced wholesale, so anything bound to the previous DOM is gone with it.
+  function paintPanel(){
+    document.getElementById('stage-body').innerHTML = PANELS[L.tab]();
+    document.querySelectorAll('#ltabs button').forEach(b=>{
+      b.setAttribute('aria-current', String(b.dataset.l===L.tab));
+      b.onclick=()=>{ L.tab=b.dataset.l; paintPanel(); };
+    });
+    if(L.tab==='search') wireSearch();
+    if(L.tab==='coverage') loadCoverage();
+  }
+
+  async function loadCoverage(){
+    const box=document.getElementById('cov');
+    try{
+      const rows=await (await fetch('/v1/public/components?limit=60')).json();
+      box.innerHTML = rows.length ? rows.map(c=>`<div class="cov">
+        <span class="r">${esc(c.ref)}</span>
+        <span class="n">${Number(c.records).toLocaleString()}</span></div>`).join('')
+        : '<div class="empty">The catalog is still filling.</div>';
+    }catch{ box.innerHTML='<p class="error">Coverage is unavailable right now.</p>'; }
+  }
+
+  function wireSearch(){
+    fetch('/v1/public/stats').then(r=>r.json()).then(st=>{
+      const n=v=>Number(v||0).toLocaleString();
+      const figs=document.getElementById('figs');
+      if(!figs) return;
+      figs.innerHTML=[
+        [n(st.records),'records'],[n(st.components),'components'],
+        [n(st.beyond_security),'beyond CVEs'],
+      ].map(([v,k])=>`<div class="fig"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+    }).catch(()=>{});
+
+    const qbox=document.getElementById('pq');
+    document.getElementById('pgo').onclick=()=>demo(qbox.value.trim());
+    qbox.addEventListener('keydown',e=>{ if(e.key==='Enter') demo(e.target.value.trim()); });
+    document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+      qbox.value=c.dataset.q; demo(c.dataset.q);
+    });
+    if(hits.length) paint();
+  }
+
   const sheet=document.getElementById('sheet');
   const openSheet=()=>{sheet.hidden=false;document.getElementById('em').focus();};
   const closeSheet=()=>{sheet.hidden=true;};
@@ -440,15 +562,7 @@ function signin(msg){
 
   const err = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display=''; };
 
-  // Real counts rather than a claim. Public scope only, so nothing here is a tenant's.
-  fetch('/v1/public/stats').then(r=>r.json()).then(s=>{
-    const n=v=>Number(v||0).toLocaleString();
-    document.getElementById('figs').innerHTML=[
-      [n(s.records),'records'],[n(s.components),'components'],[n(s.beyond_security),'beyond CVEs'],
-    ].map(([v,k])=>`<div class="fig"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
-  }).catch(()=>{});
 
-  let hits=[], filter='all', lastQ='';
 
   const paint=()=>{
     const out=document.getElementById('pout'), tabs=document.getElementById('ptabs');
@@ -490,13 +604,6 @@ function signin(msg){
       paint();
     }catch{ hits=[]; out.innerHTML='<p class="error">Search is unavailable right now.</p>'; }
   }
-  const qbox=document.getElementById('pq');
-  document.getElementById('pgo').onclick=()=>demo(qbox.value.trim());
-  qbox.addEventListener('keydown',e=>{ if(e.key==='Enter') demo(e.target.value.trim()); });
-  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
-    qbox.value=c.dataset.q; demo(c.dataset.q);
-  });
-
   document.getElementById('usekey').onclick=e=>{
     e.preventDefault();
     document.getElementById('kf').style.display='';
@@ -542,6 +649,8 @@ function signin(msg){
     try{S.me=await api('/v1/whoami');render();}
     catch{clearCreds();signin('That key was not accepted.');}
   };
+
+  paintPanel();
 }
 
 /* ---------------- views ---------------- */
