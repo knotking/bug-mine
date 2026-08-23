@@ -120,6 +120,40 @@ def search_public_bugs(
     return [b for b in out if b is not None]
 
 
+@public.get("/stats")
+def public_stats(session: Session = Depends(anonymous_session)) -> dict[str, object]:
+    """Public catalog coverage, for anyone — no credential.
+
+    The landing page shows what the catalog actually holds rather than claiming a number, and
+    the same route lets a prospective user check coverage of something they depend on before
+    asking for an account. Public scope only, so nothing here is a tenant's.
+    """
+    scope = (
+        BugRecord.privacy_scope == PrivacyScope.PUBLIC,
+        BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES),
+    )
+    by_type = dict(
+        session.execute(
+            select(BugRecord.bug_type, func.count(BugRecord.id))
+            .where(*scope)
+            .group_by(BugRecord.bug_type)
+        ).all()
+    )
+    records = int(session.execute(select(func.count(BugRecord.id)).where(*scope)).scalar_one())
+    components = int(
+        session.execute(
+            select(func.count(func.distinct(BugRecord.component_id))).where(*scope)
+        ).scalar_one()
+    )
+    return {
+        "records": records,
+        "components": components,
+        "by_type": {k.value: int(v) for k, v in by_type.items()},
+        # The split that carries the argument: what CVE-shaped tooling does not report.
+        "beyond_security": records - int(by_type.get(BugType.SECURITY, 0)),
+    }
+
+
 catalog = APIRouter(prefix="/v1", tags=["catalog"])
 
 

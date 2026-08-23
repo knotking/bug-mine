@@ -658,3 +658,39 @@ class TestOperatorSources:
         with tenant_session(engine, None, commit=False) as s:
             urls = [row.url for row in s.execute(select(Source)).scalars()]
         assert url not in urls
+
+
+class TestPublicStats:
+    def test_stats_need_no_credential(self, client: TestClient, engine: Engine) -> None:
+        """The landing page shows what the catalog holds rather than claiming a number, and a
+        prospective user can check coverage before asking for an account."""
+        r = client.get("/v1/public/stats")
+        assert r.status_code == 200
+        body = r.json()
+        assert {"records", "components", "by_type", "beyond_security"} <= set(body)
+
+    def test_stats_exclude_tenant_records(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Public scope only. A tenant's own findings must never reach an anonymous caller."""
+        tenant, _ = two_tenants
+        before = client.get("/v1/public/stats").json()["records"]
+        with tenant_session(engine, tenant) as s:
+            write(
+                s,
+                IncomingBug(
+                    subject_domain=SubjectDomain.REPO_LIBRARY,
+                    component_ref=f"private-{uuid.uuid4().hex[:6]}",
+                    ecosystem="pypi",
+                    bug_type=BugType.SECURITY,
+                    applicability={"kind": "version_range", "scheme": "generic",
+                                   "introduced_in": "1.0.0", "fixed_in": None},
+                    title="A private finding",
+                ),
+                origin=RecordOrigin.SCAN_DERIVED,
+                privacy_scope=PrivacyScope.TENANT,
+                # Scope and tenant travel together by construction: the writer refuses tenant
+                # scope without a tenant, so a private record cannot be created unattributed.
+                tenant_id=tenant,
+            )
+        assert client.get("/v1/public/stats").json()["records"] == before

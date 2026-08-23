@@ -213,6 +213,52 @@ h2{font-size:19px;letter-spacing:-.015em;font-weight:650;margin-bottom:3px}
   .skel{animation:shimmer 1.3s ease-in-out infinite}
   @keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
 }
+/* ---------- landing ---------- */
+.land{min-height:100vh;display:grid;grid-template-columns:1.15fr .85fr;position:relative;
+  overflow:hidden}
+.land-left{padding:clamp(28px,5vw,64px);display:flex;flex-direction:column;justify-content:center;
+  position:relative;z-index:1}
+.land-right{padding:clamp(24px,4vw,48px);display:grid;place-items:center;position:relative;
+  z-index:1;border-left:1px solid var(--line);background:var(--panel)}
+@media(max-width:900px){
+  .land{grid-template-columns:1fr}
+  .land-right{border-left:0;border-top:1px solid var(--line)}
+  .land-left{padding-bottom:8px}
+}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;
+  padding:5px 11px 5px 8px;border-radius:999px;border:1px solid var(--line);
+  background:var(--accent-soft);color:var(--accent-dim);font-size:12px;font-weight:600;
+  letter-spacing:.01em;margin-bottom:20px}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+h1.hero{font-size:clamp(30px,4.4vw,50px);line-height:1.05;letter-spacing:-.032em;font-weight:680;
+  margin-bottom:16px;max-width:15ch}
+h1.hero em{font-style:normal;background:linear-gradient(100deg,var(--accent),var(--accent-dim));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:clamp(15px,1.5vw,17.5px);color:var(--dim);line-height:1.6;max-width:52ch;
+  margin-bottom:28px}
+.figures{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:30px}
+.fig .v{font-size:27px;font-weight:660;letter-spacing:-.022em;font-variant-numeric:tabular-nums;
+  line-height:1.1}
+.fig .k{font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.055em;
+  margin-top:3px;font-weight:600}
+.points{display:grid;gap:11px;margin-bottom:8px}
+.point{display:flex;gap:11px;align-items:flex-start;font-size:14px;color:var(--dim);
+  line-height:1.5;max-width:56ch}
+.point svg{flex:none;width:17px;height:17px;margin-top:2px;color:var(--accent)}
+.point b{color:var(--fg);font-weight:600}
+/* The live demo: the catalog is public, so a visitor can query it before signing in. */
+.try{margin-top:26px;max-width:520px}
+.try .bar{display:flex;gap:8px;margin-bottom:10px}
+.try input{flex:1}
+.try-out{display:grid;gap:7px;max-height:210px;overflow-y:auto}
+.hit{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;
+  border:1px solid var(--line);background:var(--panel);font-size:13px}
+.hit .c{font-weight:600}
+.hit .t{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chip{padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:transparent;
+  color:var(--dim);font-size:12px;cursor:pointer;transition:all .12s ease}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
 </style>
 
 <div class="theme" role="group" aria-label="Colour theme">
@@ -276,30 +322,101 @@ async function api(path,opts={}){
 }
 
 /* ---------------- sign in ---------------- */
+const TICK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+  stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
 function signin(msg){
-  app.innerHTML=`<div class="auth"><div class="auth-grid"></div><div class="auth-card">
-    <div class="mark">${LOGO}<h1>BugMine</h1></div>
-    <p class="tagline">The bugs your scanners miss — breaking changes, deprecations and
-      regressions across everything you depend on, narrowed to the ones your code actually
-      reaches.</p>
-    <form id="f">
-      <div class="field"><label for="em">Email</label>
-        <input id="em" type="email" autocomplete="username" autofocus></div>
-      <div class="field"><label for="pw">Password</label>
-        <input id="pw" type="password" autocomplete="current-password"></div>
-      <button class="btn" id="signin-go">Sign in</button>
-    </form>
-    <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
-    <p class="note">Accounts are created by invitation.
-      <a href="#" id="usekey">Sign in with an API key instead</a>.</p>
-    <form id="kf" style="display:none;margin-top:12px">
-      <div class="field"><label for="k">API key</label>
-        <input id="k" type="password" placeholder="bmk_…" autocomplete="off"></div>
-      <button class="btn ghost">Use key</button>
-    </form>
-  </div></div>`;
+  app.innerHTML=`<div class="land">
+    <div class="auth-grid"></div>
+    <div class="land-left">
+      <div class="mark">${LOGO}<h1>BugMine</h1></div>
+      <span class="eyebrow"><span class="dot"></span>Catalog live &amp; crawling</span>
+      <h1 class="hero">Every dependency breaks. <em>Know which ones break you.</em></h1>
+      <p class="lede">Scanners tell you a package has a defect. BugMine tells you whether your
+        code ever touches it — and catalogs the breaking changes, deprecations and regressions
+        that never get a CVE at all.</p>
+
+      <div class="figures" id="figs">
+        <div class="fig"><div class="v">—</div><div class="k">records</div></div>
+        <div class="fig"><div class="v">—</div><div class="k">components</div></div>
+        <div class="fig"><div class="v">—</div><div class="k">beyond CVEs</div></div>
+      </div>
+
+      <div class="points">
+        <div class="point">${TICK}<div><b>Reachability, not inventory.</b> A known defect in a
+          package you never call is suppressed, not reported.</div></div>
+        <div class="point">${TICK}<div><b>Beyond security.</b> Deprecations and breaking changes
+          are the majority of what we hold — the part CVE tooling ignores.</div></div>
+        <div class="point">${TICK}<div><b>Every finding cites its record.</b> No ungrounded
+          claims, and "not covered" is said out loud rather than shown as clean.</div></div>
+      </div>
+
+      <div class="try">
+        <div class="sub" style="margin-bottom:8px">Search the public catalog — no account needed.</div>
+        <div class="bar">
+          <input id="pq" placeholder="numpy, sqlalchemy, requests…" autocomplete="off">
+          <button class="btn" id="pgo" style="width:auto;padding:0 18px">Search</button>
+        </div>
+        <div class="chips">
+          ${['numpy','sqlalchemy','requests','httpx','pytest'].map(c=>
+            `<button class="chip" data-q="${c}">${c}</button>`).join('')}
+        </div>
+        <div class="try-out" id="pout"></div>
+      </div>
+    </div>
+
+    <div class="land-right"><div class="auth-card">
+      <h2 style="margin-bottom:4px">Sign in</h2>
+      <p class="sub" style="margin-bottom:20px">Accounts are created by invitation.</p>
+      <form id="f">
+        <div class="field"><label for="em">Email</label>
+          <input id="em" type="email" autocomplete="username"></div>
+        <div class="field"><label for="pw">Password</label>
+          <input id="pw" type="password" autocomplete="current-password"></div>
+        <button class="btn" id="signin-go">Sign in</button>
+      </form>
+      <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
+      <p class="note"><a href="#" id="usekey">Sign in with an API key instead</a></p>
+      <form id="kf" style="display:none;margin-top:12px">
+        <div class="field"><label for="k">API key</label>
+          <input id="k" type="password" placeholder="bmk_…" autocomplete="off"></div>
+        <button class="btn ghost">Use key</button>
+      </form>
+    </div></div>
+  </div>`;
 
   const err = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display=''; };
+
+  // Real numbers rather than a claim. Public scope only, so nothing here is a tenant's.
+  fetch('/v1/public/stats').then(r=>r.json()).then(s=>{
+    const n=v=>Number(v||0).toLocaleString();
+    document.getElementById('figs').innerHTML=[
+      [n(s.records),'records'],[n(s.components),'components'],[n(s.beyond_security),'beyond CVEs'],
+    ].map(([v,k])=>`<div class="fig"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+  }).catch(()=>{});
+
+  async function demo(q){
+    const out=document.getElementById('pout');
+    if(!q) return;
+    out.innerHTML='<div class="skel" style="height:38px"></div>';
+    try{
+      const r=await fetch(`/v1/public/bugs/search?limit=6&q=${encodeURIComponent(q)}`);
+      const rows=await r.json();
+      out.innerHTML = rows.length ? rows.map(b=>`<div class="hit">
+        <span class="tag t-${esc(b.bug_type)}">${esc(b.bug_type.replace(/_/g,' '))}</span>
+        <span class="c">${esc(b.component.ref)}</span>
+        <span class="t">${esc(b.title)}</span></div>`).join('')
+        : `<div class="empty" style="padding:14px">No coverage for “${esc(q)}” yet — which means
+           we do not know, not that it is healthy.</div>`;
+    }catch{ out.innerHTML='<p class="error">Search is unavailable right now.</p>'; }
+  }
+  document.getElementById('pgo').onclick=()=>demo(document.getElementById('pq').value.trim());
+  document.getElementById('pq').addEventListener('keydown',e=>{
+    if(e.key==='Enter') demo(e.target.value.trim());
+  });
+  document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
+    document.getElementById('pq').value=c.dataset.q; demo(c.dataset.q);
+  });
 
   document.getElementById('usekey').onclick=e=>{
     e.preventDefault();
@@ -312,7 +429,6 @@ function signin(msg){
     const btn=document.getElementById('signin-go');
     btn.disabled=true; btn.textContent='Signing in…';
     try{
-      /* Identity Platform holds the password; it is never sent to BugMine. */
       const r=await fetch(
         `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_KEY}`,
         {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -333,8 +449,6 @@ function signin(msg){
       render();
     }catch(ex){
       clearCreds();
-      /* A Firebase account without a BugMine account is the invite-only rule working, not a
-         failed password — saying "sign-in failed" would send the user to reset it pointlessly. */
       err(/no_account|403/.test(String(ex.message)) ?
         'That sign-in worked, but the address has no BugMine account. Ask for an invite.' :
         ex.message);
