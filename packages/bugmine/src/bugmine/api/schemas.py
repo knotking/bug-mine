@@ -147,6 +147,54 @@ class ApiKeyOut(BaseModel):
     revoked: bool
 
 
+class UsageLineOut(BaseModel):
+    """One row of the usage breakdown."""
+
+    label: str
+    purpose: str
+    input_tokens: int
+    output_tokens: int
+    cached_input_tokens: int
+    calls: int
+    failed_calls: int
+    cost_micros: int
+
+
+class UsageOut(BaseModel):
+    """Token and cost accounting for the calling tenant.
+
+    Deliberately scoped to the tenant. System spend — the cost of crawling the world so the
+    catalog exists — is not a tenant's to see: it does not vary with their usage and exposing
+    it would invite reading it as a bill.
+    """
+
+    since: datetime
+    until: datetime
+    input_tokens: int
+    output_tokens: int
+    cached_input_tokens: int
+    cost_micros: int
+    by_team: list[UsageLineOut]
+    by_user: list[UsageLineOut]
+    by_purpose: list[UsageLineOut]
+
+
+class MintKeyIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    team_id: str | None = None
+    user_id: str | None = None
+    """Exactly one of team_id or user_id. FR-80: a key is never tenant-wide, because the token
+    ledger attributes spend per team and per user and a shared key cannot populate either."""
+
+
+class MintedKeyOut(BaseModel):
+    id: str
+    name: str
+    prefix: str
+    secret: str
+    """Returned once, at creation, and never retrievable again — only the hash is stored."""
+
+
 class SourceOut(BaseModel):
     id: str
     url: str

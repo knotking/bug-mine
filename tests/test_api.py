@@ -25,6 +25,7 @@ from bugmine.models import (
     SubjectDomain,
     Team,
 )
+from bugmine.models.metering import CostBearer, UsageEvent, UsagePurpose
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select
 
@@ -415,3 +416,167 @@ class TestConsoleIsNotCached:
         r = client.get("/console")
         assert r.status_code == 200
         assert "no-store" in r.headers.get("cache-control", "")
+
+
+class TestUsageAccounting:
+    """Token accounting at team and user level.
+
+    The ledger has recorded this since the metering work and nothing exposed it, so the
+    accounting that was asked for existed and was invisible.
+    """
+
+    def _spend(
+        self,
+        engine: Engine,
+        tenant: uuid.UUID,
+        *,
+        team_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+        bearer: CostBearer = CostBearer.TENANT,
+        cost: int = 1000,
+        succeeded: bool = True,
+    ) -> None:
+        with tenant_session(engine, None if bearer is CostBearer.SYSTEM else tenant) as s:
+            s.add(
+                UsageEvent(
+                    cost_bearer=bearer,
+                    tenant_id=None if bearer is CostBearer.SYSTEM else tenant,
+                    team_id=team_id,
+                    user_id=user_id,
+                    purpose=UsagePurpose.EXTRACT,
+                    model_id="gemini-3.7-flash",
+                    input_tokens=100,
+                    output_tokens=50,
+                    rate_card_version="v1",
+                    cost_micros=cost,
+                    succeeded=succeeded,
+                )
+            )
+
+    def test_usage_totals_the_tenants_own_spend(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        self._spend(engine, tenant, cost=2500)
+        body = client.get("/v1/usage", headers={"X-BugMine-Key": key}).json()
+        assert body["cost_micros"] == 2500
+        assert body["input_tokens"] == 100
+
+    def test_system_spend_is_excluded(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Crawling the world is what makes the catalog exist. It does not vary with a tenant's
+        usage, and showing it here would read as a bill they owe."""
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        before = client.get("/v1/usage", headers={"X-BugMine-Key": key}).json()["cost_micros"]
+        self._spend(engine, tenant, bearer=CostBearer.SYSTEM, cost=999_999)
+        after = client.get("/v1/usage", headers={"X-BugMine-Key": key}).json()["cost_micros"]
+        assert after == before
+
+    def test_failed_calls_are_counted_separately(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """A retry loop that never succeeds still spends. A total that hid it would look idle."""
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        self._spend(engine, tenant, succeeded=False, cost=700)
+        body = client.get("/v1/usage", headers={"X-BugMine-Key": key}).json()
+        assert sum(line["failed_calls"] for line in body["by_purpose"]) >= 1
+
+    def test_a_tenant_never_sees_another_tenants_usage(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        a, b = two_tenants
+        key_a = _issue_key(engine, a)
+        self._spend(engine, b, cost=444_444)
+        body = client.get("/v1/usage", headers={"X-BugMine-Key": key_a}).json()
+        assert body["cost_micros"] != 444_444
+
+
+class TestKeyMinting:
+    def test_a_key_can_be_minted_and_used(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        headers = {"X-BugMine-Key": key}
+        teams = client.get("/v1/tenant/api-keys", headers=headers).json()
+        assert teams  # the issuing key is listed
+
+        with tenant_session(engine, tenant) as s:
+            team_id = str(s.execute(select(Team)).scalars().first().id)
+
+        r = client.post(
+            "/v1/tenant/api-keys",
+            headers=headers,
+            json={"name": "ci", "team_id": team_id},
+        )
+        assert r.status_code == 201
+        minted = r.json()["secret"]
+        assert minted.startswith("bmk_")
+        # The point of minting: the new key authenticates.
+        assert client.get("/v1/whoami", headers={"X-BugMine-Key": minted}).status_code == 200
+
+    def test_a_key_must_name_exactly_one_principal(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """FR-80. Spend is attributed per team and per user; a tenant-wide key could populate
+        neither, so per-team reporting would be structurally impossible."""
+        tenant, _ = two_tenants
+        headers = {"X-BugMine-Key": _issue_key(engine, tenant)}
+        r = client.post("/v1/tenant/api-keys", headers=headers, json={"name": "bad"})
+        assert r.status_code == 400
+        assert r.json()["detail"]["error"]["code"] == "one_principal_required"
+
+    def test_a_revoked_key_stops_working(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        tenant, _ = two_tenants
+        headers = {"X-BugMine-Key": _issue_key(engine, tenant)}
+        with tenant_session(engine, tenant) as s:
+            team_id = str(s.execute(select(Team)).scalars().first().id)
+        created = client.post(
+            "/v1/tenant/api-keys", headers=headers, json={"name": "temp", "team_id": team_id}
+        ).json()
+        assert client.get("/v1/whoami", headers={"X-BugMine-Key": created["secret"]}).status_code == 200
+
+        assert client.delete(f"/v1/tenant/api-keys/{created['id']}", headers=headers).status_code == 204
+        assert client.get("/v1/whoami", headers={"X-BugMine-Key": created["secret"]}).status_code == 401
+
+
+class TestWritesActuallyPersist:
+    """Round-trip, not just isolation.
+
+    The isolation test asserted only that tenant B could not see tenant A's source — which
+    passes trivially when the source was never written. The console session was read-only, so
+    every write through it returned success and was discarded: POST /v1/sources answered 201
+    with a populated body and left the table empty.
+    """
+
+    def test_a_source_survives_the_request_that_created_it(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        tenant, _ = two_tenants
+        headers = {"X-BugMine-Key": _issue_key(engine, tenant)}
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        assert client.post(
+            "/v1/sources", headers=headers,
+            json={"url": url, "component_ref": "x", "ecosystem": "pypi"},
+        ).status_code == 201
+        seen = client.get("/v1/sources", headers=headers).json()
+        assert any(s["url"] == url for s in seen), "the source did not persist"
+
+    def test_a_read_route_cannot_commit(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Read handlers keep the non-committing session, so a stray write stays discarded."""
+        import inspect
+
+        from bugmine.api import app as app_module
+
+        source = inspect.getsource(app_module)
+        for route in ('@console.get("/tenant/members"', '@console.get("/usage"'):
+            block = source[source.index(route) : source.index("\n\n\n", source.index(route))]
+            assert "tenant_db_write" not in block, f"{route} uses a committing session"

@@ -14,7 +14,8 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
@@ -26,11 +27,18 @@ from sqlalchemy.orm import Session
 from bugmine import sweep as sweep_mod
 from bugmine import tasks, urlguard
 from bugmine.api import schemas as S
-from bugmine.api.deps import Principal, anonymous_session, require_principal, tenant_db
+from bugmine.api.deps import (
+    Principal,
+    anonymous_session,
+    require_principal,
+    tenant_db,
+    tenant_db_write,
+)
 from bugmine.catalog import Query, retrieve
 from bugmine.catalog.reader import current_version
 from bugmine.db import make_engine, tenant_session
 from bugmine.firebase import TokenVerifier
+from bugmine.identity import mint_api_key
 from bugmine.models import (
     VISIBLE_LIFECYCLE_STATES,
     ApiKey,
@@ -41,9 +49,11 @@ from bugmine.models import (
     PrivacyScope,
     Source,
     SubjectDomain,
+    Team,
     Tenant,
     User,
 )
+from bugmine.models.metering import CostBearer, UsageEvent
 
 ECOSYSTEM_DOMAIN = {
     "pypi": SubjectDomain.REPO_LIBRARY,
@@ -371,6 +381,136 @@ def list_members(session: Session = Depends(tenant_db)) -> list[S.MemberOut]:
     return [S.MemberOut(email=u.email, role=m.role.value, joined_at=m.joined_at) for m, u in rows]
 
 
+@console.get("/usage", response_model=S.UsageOut)
+def tenant_usage(
+    session: Session = Depends(tenant_db),
+    days: int = Q(default=30, ge=1, le=365),
+) -> S.UsageOut:
+    """Token and cost accounting for this tenant, split by team, user and purpose.
+
+    The ledger has carried this since the metering work; nothing exposed it, so the accounting
+    asked for at system, team and user level existed and was invisible. RLS scopes the rows to
+    the caller's tenant, so this cannot report another tenant's spend even if the query forgot
+    to filter — but system spend is excluded explicitly below rather than left to that.
+    """
+    until = datetime.now(UTC)
+    since = until - timedelta(days=days)
+
+    # Tenant-borne only. System spend is the cost of building the catalog at all; it does not
+    # vary with a tenant's usage and showing it here would read as a bill they owe.
+    scope = (
+        UsageEvent.occurred_at >= since,
+        UsageEvent.cost_bearer == CostBearer.TENANT,
+    )
+
+    totals = session.execute(
+        select(
+            func.coalesce(func.sum(UsageEvent.input_tokens), 0),
+            func.coalesce(func.sum(UsageEvent.output_tokens), 0),
+            func.coalesce(func.sum(UsageEvent.cached_input_tokens), 0),
+            func.coalesce(func.sum(UsageEvent.cost_micros), 0),
+        ).where(*scope)
+    ).one()
+
+    def breakdown(group_column, label_for) -> list[S.UsageLineOut]:  # type: ignore[no-untyped-def]
+        rows = session.execute(
+            select(
+                group_column,
+                UsageEvent.purpose,
+                func.coalesce(func.sum(UsageEvent.input_tokens), 0),
+                func.coalesce(func.sum(UsageEvent.output_tokens), 0),
+                func.coalesce(func.sum(UsageEvent.cached_input_tokens), 0),
+                func.count(UsageEvent.id),
+                # Failed calls are billed and must be visible: a retry loop that never succeeds
+                # spends real money, and a total that hid it would look like idleness.
+                func.count(UsageEvent.id).filter(~UsageEvent.succeeded),
+                func.coalesce(func.sum(UsageEvent.cost_micros), 0),
+            )
+            .where(*scope)
+            .group_by(group_column, UsageEvent.purpose)
+            .order_by(func.sum(UsageEvent.cost_micros).desc())
+        ).all()
+        return [
+            S.UsageLineOut(
+                label=label_for(key),
+                purpose=purpose.value,
+                input_tokens=int(inp),
+                output_tokens=int(out),
+                cached_input_tokens=int(cached),
+                calls=int(calls),
+                failed_calls=int(failed),
+                cost_micros=int(cost),
+            )
+            for key, purpose, inp, out, cached, calls, failed, cost in rows
+        ]
+
+    team_names = {t.id: t.name for t in session.execute(select(Team)).scalars()}
+    user_emails = {u.id: u.email for u in session.execute(select(User)).scalars()}
+
+    return S.UsageOut(
+        since=since,
+        until=until,
+        input_tokens=int(totals[0]),
+        output_tokens=int(totals[1]),
+        cached_input_tokens=int(totals[2]),
+        cost_micros=int(totals[3]),
+        by_team=breakdown(UsageEvent.team_id, lambda k: team_names.get(k, "unattributed")),
+        by_user=breakdown(UsageEvent.user_id, lambda k: user_emails.get(k, "unattributed")),
+        by_purpose=breakdown(UsageEvent.purpose, lambda k: k.value),
+    )
+
+
+@console.post("/tenant/api-keys", response_model=S.MintedKeyOut, status_code=201)
+def mint_key(
+    body: S.MintKeyIn,
+    session: Session = Depends(tenant_db_write),
+    principal: Principal = Depends(require_principal),
+) -> S.MintedKeyOut:
+    """Mint a key for one team or one user.
+
+    Until now the only way to issue a key was the admin CLI over a Cloud Run job, which meant
+    an operator had to do it for every user.
+    """
+    if (body.team_id is None) == (body.user_id is None):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "code": "one_principal_required",
+                    "message": "Provide exactly one of team_id or user_id.",
+                }
+            },
+        )
+    try:
+        minted = mint_api_key(
+            session,
+            tenant_id=principal.tenant_id,
+            name=body.name,
+            team_id=uuid.UUID(body.team_id) if body.team_id else None,
+            user_id=uuid.UUID(body.user_id) if body.user_id else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail={"error": {"code": "invalid_principal", "message": str(exc)}}
+        ) from exc
+    return S.MintedKeyOut(
+        id=str(minted.id), name=body.name, prefix=minted.prefix, secret=minted.secret
+    )
+
+
+@console.delete("/tenant/api-keys/{key_id}", status_code=204)
+def revoke_key(key_id: str, session: Session = Depends(tenant_db_write)) -> None:
+    """Revoke rather than delete: the usage ledger references the key, and losing the row would
+    detach spend from whatever incurred it."""
+    key = session.get(ApiKey, key_id)
+    if key is None:
+        raise HTTPException(
+            status_code=404, detail={"error": {"code": "not_found", "message": "No such key."}}
+        )
+    if key.revoked_at is None:
+        key.revoked_at = datetime.now(UTC)
+
+
 @console.get("/tenant/api-keys", response_model=list[S.ApiKeyOut])
 def list_api_keys(session: Session = Depends(tenant_db)) -> list[S.ApiKeyOut]:
     """Never returns the secret — only the prefix, which is not one."""
@@ -411,7 +551,7 @@ def list_sources(session: Session = Depends(tenant_db)) -> list[S.SourceOut]:
 @console.post("/sources", response_model=S.SourceOut, status_code=201)
 def create_source(
     body: S.SourceIn,
-    session: Session = Depends(tenant_db),
+    session: Session = Depends(tenant_db_write),
     principal: Principal = Depends(require_principal),
 ) -> S.SourceOut:
     """Add a tenant crawl source.

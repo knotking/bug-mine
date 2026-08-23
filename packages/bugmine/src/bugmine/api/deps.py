@@ -185,5 +185,23 @@ def _principal_from_firebase(request: Request, token: str) -> Principal:
 def tenant_db(
     request: Request, principal: Principal = Depends(require_principal)
 ) -> Iterator[Session]:
+    """Read-only tenant session. Writes through this are discarded — use `tenant_db_write`.
+
+    Read-only by default is the right posture, but it is silent about misuse: a handler that
+    writes through this returns its success response and loses the row. That is how sources
+    added from the console vanished — 201 with a populated body, and nothing in the table.
+    """
     with tenant_session(request.app.state.engine, principal.tenant_id, commit=False) as session:
+        yield session
+
+
+def tenant_db_write(
+    request: Request, principal: Principal = Depends(require_principal)
+) -> Iterator[Session]:
+    """Tenant session that commits on a clean exit.
+
+    Separate from `tenant_db` rather than making that one commit, so a read handler cannot
+    persist a change it never meant to make.
+    """
+    with tenant_session(request.app.state.engine, principal.tenant_id) as session:
         yield session
