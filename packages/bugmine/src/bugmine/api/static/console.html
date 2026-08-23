@@ -572,7 +572,7 @@ async function api(path,opts={}){
 /* ---------------- sign in ---------------- */
 
 
-const LAND = {why:'Why BugMine', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
+const LAND = {why:'Why BugMine', search:'Search', how:'How it works', coverage:'Coverage', editor:'Integration', api:'API'};
 let hits=[], filter='all', lastQ='';
 
 const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -783,7 +783,7 @@ function signin(msg){
 
     <section class="alt" id="editor">
       <div class="wrap center">
-        <div class="kicker">In your editor</div>
+        <div class="kicker">Integration</div>
         <h2 class="sec">Ask before you add the dependency</h2>
         <p class="secsub">The useful moment is when you are choosing a version, not three weeks
           later in a report nobody opens. BugMine speaks MCP, so an agent can ask on your behalf
@@ -848,7 +848,7 @@ GET  /v1/scans/{id}/findings</pre></div>
         </div>
         <div><h4>Product</h4>
           <a href="#search">Search</a><a href="#coverage">Coverage</a>
-          <a href="#editor">In your editor</a><a href="#api">API</a></div>
+          <a href="#editor">Integration</a><a href="#api">API</a></div>
         <div><h4>How</h4>
           <a href="#why">Why BugMine</a><a href="#how">Pipeline</a><span class="li">Reachability</span>
           <span class="li">Citations</span></div>
