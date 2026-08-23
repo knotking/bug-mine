@@ -29,6 +29,7 @@ EXPECTED = {
     "job": "may_have_no_tenant",  # system-borne work
     "bug_record": "scope_based",  # public/subscriber visible to all
     "bug_version": "inherits_from_record",
+    "source": "scope_based",  # public/subscriber visible to all, like bug_record
 }
 
 
@@ -89,7 +90,7 @@ def test_tables_needing_writes_have_a_with_check_policy(engine: Engine) -> None:
 
     This was migration 0002's bug: policies existed, reads worked, and every write failed.
     """
-    writable = ["team", "membership", "invite", "api_key", "job", "scan"]
+    writable = ["team", "membership", "invite", "api_key", "job", "scan", "source"]
     with tenant_session(engine, None, commit=False) as s:
         rows = (
             s.execute(

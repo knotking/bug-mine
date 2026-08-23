@@ -6,9 +6,11 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Index,
+    Integer,
     LargeBinary,
     String,
     Text,
@@ -173,3 +175,69 @@ class BugVersion(Base):
         UniqueConstraint("record_id", "content_hash", name="dedup_by_content"),
         Index("ix_bug_version_observed", "observed_at"),
     )
+
+
+class Source(Base):
+    """A configured crawl source.
+
+    Scope is a property of the source, not of the worker: an admin source produces `public`
+    records, a tenant source produces `tenant` records, and the same pipeline serves both. That
+    is what keeps ingestion one code path rather than two.
+
+    `last_success_at` is separate from `last_attempt_at` on purpose. A source that fails
+    silently produces no errors and no records, and the catalog keeps serving stale data — so
+    staleness is measured by absence of success, which is the only signal that failure mode
+    generates.
+    """
+
+    __tablename__ = "source"
+
+    id: Mapped[uuid.UUID] = pk_uuid()
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_domain: Mapped[SubjectDomain] = mapped_column(
+        pg_enum(SubjectDomain, "subject_domain"), nullable=False
+    )
+    component_ref: Mapped[str | None] = mapped_column(String(200))
+    ecosystem: Mapped[str | None] = mapped_column(String(50))
+
+    privacy_scope: Mapped[PrivacyScope] = mapped_column(
+        pg_enum(PrivacyScope, "privacy_scope"), nullable=False, default=PrivacyScope.PUBLIC
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenant.id", ondelete="CASCADE"))
+
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=1440)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    last_attempt_at: Mapped[datetime | None] = tz_timestamp()
+    last_success_at: Mapped[datetime | None] = tz_timestamp()
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    created_at: Mapped[datetime] = tz_timestamp(nullable=False, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("url", "tenant_id", name="source_is_unique_per_owner"),
+        Index("ix_source_due", "enabled", "last_attempt_at"),
+        CheckConstraint(
+            "(privacy_scope = 'tenant') = (tenant_id IS NOT NULL)",
+            name="source_tenant_scope_requires_tenant",
+        ),
+    )
+
+    def is_due(self, now: datetime) -> bool:
+        if not self.enabled:
+            return False
+        if self.last_attempt_at is None:
+            return True
+        return (now - self.last_attempt_at).total_seconds() >= self.interval_minutes * 60
+
+    def is_stale(self, now: datetime, *, factor: int = 3) -> bool:
+        """No successful run in `factor` intervals.
+
+        The alerting condition from the operability requirements. A dead crawler produces no
+        errors at all, so error rates cannot detect it — only absence of success can.
+        """
+        if not self.enabled:
+            return False
+        if self.last_success_at is None:
+            return self.last_attempt_at is not None
+        return (now - self.last_success_at).total_seconds() > self.interval_minutes * 60 * factor

@@ -9,7 +9,7 @@ from bugmine.models.applicability import (
     VersionRange,
 )
 from bugmine.models.base import Base
-from bugmine.models.catalog import BugRecord, BugVersion, Component, ComponentAlias
+from bugmine.models.catalog import BugRecord, BugVersion, Component, ComponentAlias, Source
 from bugmine.models.enums import (
     BugType,
     JobState,
@@ -50,6 +50,7 @@ __all__ = [
     "RecordOrigin",
     "Role",
     "Scan",
+    "Source",
     "SubjectDomain",
     "Team",
     "Tenant",
