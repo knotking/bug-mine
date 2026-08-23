@@ -16,16 +16,32 @@ import os
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from urllib.parse import quote_plus
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 
 def database_url() -> str:
-    url = os.environ.get("BUGMINE_DATABASE_URL")
-    if not url:
-        raise RuntimeError("BUGMINE_DATABASE_URL is not set")
-    return url
+    """Resolve the connection URL.
+
+    A full `BUGMINE_DATABASE_URL` wins, which suits local development. In Cloud Run the parts
+    arrive separately so that only the password comes from Secret Manager — a whole URL in an
+    environment variable puts the credential into anything that dumps the environment, which
+    includes most crash handlers.
+    """
+    if url := os.environ.get("BUGMINE_DATABASE_URL"):
+        return url
+
+    host = os.environ.get("BUGMINE_DB_HOST")
+    if not host:
+        raise RuntimeError("Set BUGMINE_DATABASE_URL, or BUGMINE_DB_HOST and friends.")
+
+    user = os.environ.get("BUGMINE_DB_USER", "bugmine_app")
+    password = quote_plus(os.environ.get("BUGMINE_DB_PASSWORD", ""))
+    name = os.environ.get("BUGMINE_DB_NAME", "bugmine")
+    port = os.environ.get("BUGMINE_DB_PORT", "5432")
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
 def make_engine(url: str | None = None, **kwargs: object) -> Engine:

@@ -7,23 +7,24 @@ edit.
 
 from __future__ import annotations
 
-import os
-
 from alembic import context
+from bugmine.db.session import database_url
 from bugmine.models import Base
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 
 config = context.config
 target_metadata = Base.metadata
 
-_url = os.environ.get("BUGMINE_DATABASE_URL")
-if _url:
-    config.set_main_option("sqlalchemy.url", _url)
+# The URL is deliberately *not* pushed through config.set_main_option. That path goes via
+# configparser, which treats `%` as interpolation syntax — and a URL-encoded password
+# containing %3C or %28 raises "invalid interpolation syntax" before a connection is ever
+# attempted. Escaping to %% would work and would silently break the moment someone passes a
+# raw URL instead. Building the engine directly avoids the class of bug.
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=config.get_main_option("sqlalchemy.url"),
+        url=database_url(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -33,11 +34,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(database_url(), poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
