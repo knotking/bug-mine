@@ -37,7 +37,14 @@ _ENUM_TYPES = [
 # RLS here is the data-layer half of NFR-19's isolation. Application filtering is one
 # forgotten WHERE clause from a cross-tenant read, and that bug returns *more* data rather
 # than an error, so it does not announce itself.
-_TENANT_TABLES = ["team", "membership", "invite", "api_key", "job", "scan"]
+_TENANT_TABLES = ["team", "membership", "invite", "job", "scan"]
+
+# api_key is deliberately not in that list. It is the table that *establishes* which tenant a
+# request belongs to, so a policy keyed on the tenant being already known is circular: the
+# lookup needed to learn the tenant is hidden until the tenant is known. Its own policy below
+# permits reads only when no tenant context is set — which is exactly the authentication
+# bootstrap — and the real access control there is possession of the secret, which is stored
+# only as a hash.
 
 
 def upgrade() -> None:
@@ -432,6 +439,14 @@ def upgrade() -> None:
     # bug_record is the exception: public and subscriber records are visible to everyone,
     # tenant-scoped ones only to their owner. Unset session tenant — the anonymous public
     # path — sees no tenant rows at all, so a handler that forgets its filter cannot leak.
+    op.execute("ALTER TABLE api_key ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE api_key FORCE ROW LEVEL SECURITY")
+    op.execute(
+        "CREATE POLICY api_key_auth_or_own ON api_key USING ("
+        "NULLIF(current_setting('bugmine.tenant_id', true), '') IS NULL OR "
+        "tenant_id = NULLIF(current_setting('bugmine.tenant_id', true), '')::uuid)"
+    )
+
     op.execute("ALTER TABLE bug_record ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE bug_record FORCE ROW LEVEL SECURITY")
     op.execute(

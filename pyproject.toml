@@ -18,6 +18,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "testcontainers[postgres]>=4.9",
+    "httpx2",
 ]
 
 [tool.ruff]
@@ -26,6 +27,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Depends() in an argument default is FastAPI's declared idiom, not the mutable-default bug
+# B008 exists to catch.
+"packages/bugmine/src/bugmine/api/*.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
