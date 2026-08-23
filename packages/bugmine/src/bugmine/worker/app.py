@@ -183,7 +183,7 @@ def create_worker_app(engine: Any = None) -> FastAPI:
     app = FastAPI(title="BugMine Worker", version="1.0.0")
     app.state.engine = engine or make_engine()
     app.state.artifact_bucket = os.environ.get("BUGMINE_ARTIFACT_BUCKET", "")
-    app.state.model = os.environ.get("BUGMINE_MODEL", "gemini-2.0-flash")
+    app.state.model = os.environ.get("BUGMINE_MODEL", "gemini-3.7-flash")
     app.state.storage = storage.Client()
 
     project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")

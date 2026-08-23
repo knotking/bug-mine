@@ -123,3 +123,48 @@ class TestValidation:
         assert len(r.bugs) == 1
         assert not hasattr(r.bugs[0], "privacy_scope")
         assert not hasattr(r.bugs[0], "tenant_id")
+
+
+class TestInvertedRecordsAreRejected:
+    """A change the release makes cannot be "fixed" by the release that makes it.
+
+    The model returned exactly this for "we removed the legacy connect_timeout option":
+    fixed_in set to the removing release, introduced_in empty. Stored that way, every version
+    that still has the option is cleared and the first version without it is flagged — the
+    precise inverse of the truth. The prompt now explains the distinction; this rejects it
+    anyway, because a prompt is a request and the response schema cannot express the rule.
+    """
+
+    def _bug(self, bug_type: str, introduced: str | None, fixed: str | None) -> dict:
+        entry = {"component_ref": "acmedb", "bug_type": bug_type, "title": "Removed an option"}
+        if introduced:
+            entry["introduced_in"] = introduced
+        if fixed:
+            entry["fixed_in"] = fixed
+        return {"bugs": [entry]}
+
+    def test_a_breaking_change_with_only_fixed_in_is_rejected(self) -> None:
+        result = _run(self._bug("breaking_change", None, "4.2.0"))
+        assert result.bugs == []
+        assert result.rejected == 1
+
+    def test_a_deprecation_with_only_fixed_in_is_rejected(self) -> None:
+        result = _run(self._bug("deprecation", None, "4.2.0"))
+        assert result.bugs == []
+        assert result.rejected == 1
+
+    def test_a_breaking_change_with_introduced_in_is_kept(self) -> None:
+        result = _run(self._bug("breaking_change", "4.2.0", None))
+        assert len(result.bugs) == 1
+        assert result.bugs[0].applicability["introduced_in"] == "4.2.0"
+
+    def test_a_reverted_breaking_change_keeps_both_bounds(self) -> None:
+        """Legitimate: introduced in 4.2.0, reverted in 4.3.0. Only *bare* fixed_in is wrong."""
+        result = _run(self._bug("breaking_change", "4.2.0", "4.3.0"))
+        assert len(result.bugs) == 1
+
+    def test_a_security_fix_with_only_fixed_in_is_kept(self) -> None:
+        """The opposite direction is the normal shape for a patch and must not be rejected."""
+        result = _run(self._bug("security", None, "4.2.0"))
+        assert len(result.bugs) == 1
+        assert result.bugs[0].applicability["fixed_in"] == "4.2.0"

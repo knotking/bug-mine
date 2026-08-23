@@ -468,7 +468,7 @@ resource "google_cloud_run_v2_service" "extract" {
 
 variable "extraction_model" {
   type    = string
-  default = "gemini-2.0-flash"
+  default = "gemini-3.7-flash"
 }
 
 output "crawl_url" {
