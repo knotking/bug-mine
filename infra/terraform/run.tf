@@ -43,13 +43,6 @@ resource "google_cloud_run_v2_job" "migrate" {
         args    = ["upgrade", "head"]
 
         env {
-          # Not a secret: Identity Platform treats the browser key as a project selector, and
-          # it is visible in every client that signs in. Passed as a plain variable so the same
-          # image serves any environment.
-          name  = "BUGMINE_FIREBASE_BROWSER_KEY"
-          value = var.firebase_browser_key
-        }
-        env {
           name  = "BUGMINE_DB_HOST"
           value = google_sql_database_instance.main.private_ip_address
         }
@@ -133,6 +126,13 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "BUGMINE_TASK_INVOKER_SA"
         value = google_service_account.worker["dispatcher"].email
+      }
+      env {
+        # Only the api service serves the console, so only it needs the browser key.
+        # Not a secret: Identity Platform treats it as a project selector, and every
+        # client that signs in can read it. Injected so one image serves any environment.
+        name  = "BUGMINE_FIREBASE_BROWSER_KEY"
+        value = var.firebase_browser_key
       }
       env {
         name  = "BUGMINE_FIREBASE_PROJECT"
