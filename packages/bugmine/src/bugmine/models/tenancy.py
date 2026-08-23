@@ -1,6 +1,6 @@
 """Tenants, principals, and onboarding.
 
-Onboarding is invite-only (FR-76 – FR-79): tenants are provisioned by an operator, users join
+Onboarding is invite-only (FR-76 to FR-79): tenants are provisioned by an operator, users join
 by invitation, and there is no domain-based auto-join. Most of what that buys is the absence of
 work — no registration endpoint means no registration abuse surface.
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bugmine.models.base import Base, pk_uuid, tz_timestamp, utcnow
