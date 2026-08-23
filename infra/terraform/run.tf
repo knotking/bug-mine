@@ -453,6 +453,20 @@ resource "google_cloud_run_v2_service" "extract" {
         value = var.extraction_model
       }
       env {
+        # `global` rather than a region: gemini-3.7-flash answers there for this project's
+        # service account, and returns 404 NOT_FOUND from us-central1 — which reads as a wrong
+        # model name rather than a wrong region, and cost a day of misdiagnosis once already.
+        name  = "BUGMINE_VERTEX_LOCATION"
+        value = "global"
+      }
+      env {
+        # `global` rather than a region: gemini-3.7-flash answers there for this project's
+        # service account, and returns 404 NOT_FOUND from us-central1 — which reads as a wrong
+        # model name rather than a wrong region, and cost a day of misdiagnosis once already.
+        name  = "BUGMINE_VERTEX_LOCATION"
+        value = "global"
+      }
+      env {
         name  = "BUGMINE_DB_HOST"
         value = google_sql_database_instance.main.private_ip_address
       }
