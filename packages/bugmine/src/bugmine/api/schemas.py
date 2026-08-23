@@ -104,6 +104,22 @@ class CrawlTriggerIn(BaseModel):
     component_ref: str | None = None
     ecosystem: str | None = None
 
+class ExtractTriggerIn(BaseModel):
+    """Re-run extraction over an artifact already in storage.
+
+    Needed because the crawl worker chains extraction only when content changed, which is the
+    right default — an unchanged source should cost no tokens. But it means a fix to the
+    extractor cannot be applied to what has already been crawled: re-crawling returns the same
+    bytes, reports no change, and enqueues nothing. This is the way back in.
+    """
+
+    artifact_uri: str
+    component_ref: str | None = None
+    ecosystem: str | None = None
+    subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
+    mode: Literal["auto", "structured", "llm"] = "auto"
+
+
 
 class JobHandleOut(BaseModel):
     task: str

@@ -270,6 +270,27 @@ def trigger_crawl(body: S.CrawlTriggerIn) -> S.JobHandleOut:
     return S.JobHandleOut(task=name, queued=True)
 
 
+@ingest.post("/extract", dependencies=[Depends(_require_operator)])
+def trigger_extract(body: S.ExtractTriggerIn) -> S.JobHandleOut:
+    """Re-extract an artifact already in storage.
+
+    The crawl worker deliberately chains extraction only on changed content, so a corrected
+    extractor would otherwise never see anything already crawled — re-crawling fetches the same
+    bytes and enqueues nothing. Operator-only, because it spends tokens on demand.
+    """
+    name = tasks.enqueue(
+        tasks.extract_target(),
+        {
+            "artifact_uri": body.artifact_uri,
+            "subject_domain": body.subject_domain.value,
+            "component_ref": body.component_ref,
+            "ecosystem": body.ecosystem,
+            "mode": body.mode,
+        },
+    )
+    return S.JobHandleOut(task=name, queued=True)
+
+
 console = APIRouter(prefix="/v1", tags=["console"])
 
 
