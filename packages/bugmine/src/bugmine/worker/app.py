@@ -12,6 +12,7 @@ services with separate identities, and only extract can reach a model.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from typing import Any
@@ -27,6 +28,8 @@ from bugmine.models import JobState, JobType, PrivacyScope, RecordOrigin, Subjec
 from bugmine.models.jobs import Job
 from bugmine.worker import crawl as crawl_mod
 from bugmine.worker import extract as extract_mod
+
+logger = logging.getLogger("bugmine.worker")
 
 router = APIRouter(prefix="/work", tags=["worker"])
 
@@ -72,7 +75,8 @@ def do_crawl(body: CrawlRequest, request: Request) -> dict[str, Any]:
             body.url, bucket_name=app.state.artifact_bucket, client=app.state.storage
         )
     except Exception as exc:
-        _finish_job(app, job_id, JobState.FAILED, str(exc)[:500])
+        logger.exception("crawl failed for %s", body.url)
+        _finish_job(app, job_id, JobState.FAILED, f"{type(exc).__name__}: {exc}"[:500])
         raise HTTPException(status_code=502, detail={"error": {"code": "fetch_failed"}}) from exc
 
     # Chain extraction only when the fetch produced something new. This is where the dedup
@@ -134,7 +138,8 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
                 else:
                     deduped += 1
     except Exception as exc:
-        _finish_job(app, job_id, JobState.FAILED, str(exc)[:500])
+        logger.exception("extraction failed for %s", body.artifact_uri)
+        _finish_job(app, job_id, JobState.FAILED, f"{type(exc).__name__}: {exc}"[:500])
         raise HTTPException(
             status_code=500, detail={"error": {"code": "extraction_failed"}}
         ) from exc

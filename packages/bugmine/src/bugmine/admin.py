@@ -168,6 +168,28 @@ def member_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def job_recent(args: argparse.Namespace) -> int:
+    """Recent jobs and why they failed.
+
+    Exists because a worker that converts an exception into a generic HTTP error leaves the
+    only useful detail in the job row, and the database is private. Without this, diagnosing a
+    live failure means a deploy cycle.
+    """
+    from bugmine.models.jobs import Job
+
+    with tenant_session(_engine(), None, commit=False) as s:
+        rows = (
+            s.execute(select(Job).order_by(Job.created_at.desc()).limit(args.limit)).scalars().all()
+        )
+        if not rows:
+            print("No jobs.")
+        for j in rows:
+            print(f"  {j.created_at:%H:%M:%S}  {j.job_type.value:<14} {j.state.value}")
+            if j.failure_reason:
+                print(f"      {j.failure_reason}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bugmine-admin", description="BugMine operator tools.")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -202,6 +224,11 @@ def main(argv: list[str] | None = None) -> int:
     kl = k.add_parser("list")
     kl.add_argument("--tenant", required=True)
     kl.set_defaults(func=key_list)
+
+    j = sub.add_parser("job").add_subparsers(dest="cmd", required=True)
+    jr = j.add_parser("recent", help="Recent jobs and their failure reasons")
+    jr.add_argument("--limit", type=int, default=15)
+    jr.set_defaults(func=job_recent)
 
     m = sub.add_parser("member").add_subparsers(dest="cmd", required=True)
     ml = m.add_parser("list")

@@ -258,6 +258,57 @@ resource "google_cloud_run_v2_job" "verify" {
 # untrusted content and holds no model; extract holds a model and cannot reach the network
 # beyond Vertex. Running both in one service would collapse that into a convention.
 
+# Operator commands need to reach the private database, so they run in the VPC too.
+resource "google_cloud_run_v2_job" "admin" {
+  name                = "bugmine-admin"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    template {
+      service_account = google_service_account.worker["dispatcher"].email
+      max_retries     = 0
+      timeout         = "300s"
+
+      vpc_access {
+        network_interfaces {
+          network    = google_compute_network.main.id
+          subnetwork = google_compute_subnetwork.main.id
+        }
+        egress = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        image   = local.image
+        command = ["bugmine-admin"]
+        args    = ["tenant", "list"]
+
+        env {
+          name  = "BUGMINE_DB_HOST"
+          value = google_sql_database_instance.main.private_ip_address
+        }
+        env {
+          name  = "BUGMINE_DB_USER"
+          value = google_sql_user.app.name
+        }
+        env {
+          name  = "BUGMINE_DB_NAME"
+          value = google_sql_database.bugmine.name
+        }
+        env {
+          name = "BUGMINE_DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 resource "google_cloud_run_v2_service" "crawl" {
   name                = "bugmine-crawl"
   location            = var.region
