@@ -96,3 +96,13 @@ def scan_analyze_target() -> QueueTarget:
         url=os.environ["BUGMINE_SCAN_ANALYZE_URL"].rstrip("/") + "/work/scan/analyze",
         service_account=os.environ["BUGMINE_TASK_INVOKER_SA"],
     )
+
+
+def osv_target() -> QueueTarget:
+    """OSV runs on the crawl service: it needs egress and no model, which is exactly what that
+    worker is provisioned for."""
+    return QueueTarget(
+        queue="bugmine-crawl",
+        url=os.environ["BUGMINE_CRAWL_URL"].rstrip("/") + "/work/osv",
+        service_account=os.environ["BUGMINE_TASK_INVOKER_SA"],
+    )

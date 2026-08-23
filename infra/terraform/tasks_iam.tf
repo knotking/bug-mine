@@ -82,3 +82,21 @@ resource "google_project_iam_member" "crawl_enqueuer" {
 output "operator_token_secret" {
   value = google_secret_manager_secret.operator_token.secret_id
 }
+
+
+# scan_fetch chains to scan_analyze the same way crawl chains to extract. Without this the clone
+# and snapshot succeed and only the handoff fails — and because the commit sha is written before
+# the enqueue, the scan looks complete while analysis never runs.
+resource "google_project_iam_member" "scan_fetch_enqueuer" {
+  project = var.project_id
+  role    = "roles/cloudtasks.enqueuer"
+  member  = "serviceAccount:${google_service_account.worker["scan_fetch"].email}"
+}
+
+# It also acts as the dispatcher when creating that task: the task authenticates as the
+# dispatcher identity, not as the worker that created it.
+resource "google_service_account_iam_member" "scan_fetch_acts_as_invoker" {
+  service_account_id = google_service_account.worker["dispatcher"].name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.worker["scan_fetch"].email}"
+}

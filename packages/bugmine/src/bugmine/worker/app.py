@@ -44,6 +44,7 @@ from bugmine.models import (
 from bugmine.models.jobs import Job
 from bugmine.worker import crawl as crawl_mod
 from bugmine.worker import extract as extract_mod
+from bugmine.worker import osv as osv_mod
 from bugmine.worker import snapshot, structured
 
 logger = logging.getLogger("bugmine.worker")
@@ -73,6 +74,11 @@ class ScanAnalyzeRequest(BaseModel):
     tenant_id: str
     scan_id: str
     commit_sha: str | None = None
+
+
+class OsvRequest(BaseModel):
+    ecosystem: str
+    name: str
 
 
 class ExtractRequest(BaseModel):
@@ -278,6 +284,50 @@ def _finish_job(
         if job is not None:
             job.state = state
             job.failure_reason = reason
+
+
+@router.post("/osv")
+def do_osv(body: OsvRequest, request: Request) -> dict[str, Any]:
+    """Ingest OSV advisories for one package.
+
+    Fetch and write in one worker, unlike crawl and extract. That split exists because
+    extraction feeds untrusted prose to a model; OSV goes nowhere near one — the ranges are
+    declared, so a parser is both cheaper and more certain, and there is no injection surface to
+    contain.
+    """
+    app = request.app
+    job_id = _record_job(app, JobType.CRAWL, body.model_dump(mode="json"))
+    try:
+        payload = osv_mod.fetch(body.ecosystem, body.name)
+        result = osv_mod.parse(payload)
+
+        written = deduped = 0
+        with tenant_session(app.state.engine, None) as s:
+            for bug in result.bugs:
+                outcome = write(
+                    s, bug, origin=RecordOrigin.CRAWLED, privacy_scope=PrivacyScope.PUBLIC
+                )
+                if outcome.created_version:
+                    written += 1
+                else:
+                    deduped += 1
+    except Exception as exc:
+        logger.exception("osv ingest failed for %s/%s", body.ecosystem, body.name)
+        _finish_job(app, job_id, JobState.FAILED, f"{type(exc).__name__}: {exc}"[:500])
+        raise HTTPException(status_code=502, detail={"error": {"code": "osv_failed"}}) from exc
+
+    _finish_job(app, job_id, JobState.SUCCEEDED)
+    return {
+        "job_id": str(job_id),
+        "advisories": len(payload.get("vulns") or []),
+        "records": len(result.bugs),
+        "written": written,
+        "deduped": deduped,
+        # Surfaced rather than dropped: an advisory the source has retracted must not quietly
+        # become a finding, and the count is how we notice if that starts happening often.
+        "withdrawn": result.withdrawn,
+        "skipped": result.skipped,
+    }
 
 
 @router.post("/crawl")

@@ -353,6 +353,34 @@ def trigger_crawl(body: S.CrawlTriggerIn) -> S.JobHandleOut:
     return S.JobHandleOut(task=name, queued=True)
 
 
+@ingest.post("/osv", dependencies=[Depends(_require_operator)])
+def trigger_osv(request: Request, limit: int = Q(default=250, ge=1, le=2000)) -> dict[str, object]:
+    """Ingest OSV advisories for every component already in the catalog.
+
+    Driven from the components we hold rather than from OSV's full export: the export is tens of
+    thousands of advisories for packages nobody here depends on, and coverage of what we already
+    track is worth more than volume for its own sake.
+    """
+    with tenant_session(request.app.state.engine, None, commit=False) as session:
+        rows = session.execute(
+            select(Component.canonical_ref, Component.ecosystem)
+            .where(Component.ecosystem.isnot(None))
+            .distinct()
+            .limit(limit)
+        ).all()
+
+    enqueued = 0
+    for ref, ecosystem in rows:
+        if ecosystem not in scan_mod.ECOSYSTEM_DOMAIN:
+            continue
+        try:
+            tasks.enqueue(tasks.osv_target(), {"ecosystem": ecosystem, "name": ref})
+            enqueued += 1
+        except Exception:
+            logger.exception("could not enqueue OSV for %s/%s", ecosystem, ref)
+    return {"components": len(rows), "enqueued": enqueued}
+
+
 @ingest.post("/sources", dependencies=[Depends(_require_operator)], status_code=201)
 def add_system_source(body: S.SourceIn, request: Request) -> S.SourceOut:
     """Register a source for the **shared** catalog.
