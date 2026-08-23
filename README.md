@@ -69,6 +69,7 @@ still open. Everything else in `docs/` is the detailed version of a section in t
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
 | [`docs/motivation/`](docs/motivation/) | Researched problem evidence, trajectory, market sizing, and the solution mapped to both |
 | [`docs/plan/mvp.md`](docs/plan/mvp.md) | MVP plan — multi-tenancy, dual-trigger ingestion, scanning, client integrations, GCP mapping and costs |
+| [`docs/plan/token-accounting.md`](docs/plan/token-accounting.md) | LLM token attribution and ceiling enforcement across system, tenant, team and user |
 | [`docs/adr/`](docs/adr/) | Decision records — append-only |
 
 Requirement IDs are unique and stable across every document. They are **not** sequential within a

@@ -84,3 +84,5 @@ scales with ambition rather than with customers becomes invisible.
 | **B-D3** | Whether advice runs count as scans for FR-19's metrics (A4 in `../requirements/advisor.md`) |
 | **B-D4** | Whether self-hosted deployments report usage at all, and what that means for billing them |
 | **B-D5** | Whether ceilings are per job, per tenant per period, or both |
+
+The implementation plan for all of this is in [`../plan/token-accounting.md`](../plan/token-accounting.md), which settles the ledger shape and the enforcement points and carries the remaining decisions as T-D1 – T-D6.

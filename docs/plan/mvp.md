@@ -303,6 +303,9 @@ with crawl frequency rather than with reality.
 | Plus one-off catalog backfill | +$120 once |
 | If the scan LLM stage is added (~200 scans/day × 50 candidates) | +$200–400 |
 
+Token attribution and enforcement are planned separately in
+[`token-accounting.md`](token-accounting.md).
+
 Sensitivity, in order: **inference volume**, then Cloud SQL tier, then NAT. Everything else is
 noise. The two things that would change the picture materially are enabling the LLM reachability
 stage and increasing crawl breadth — both scale with catalog ambition rather than with tenant
