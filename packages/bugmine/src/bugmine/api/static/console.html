@@ -330,6 +330,23 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:11px;pa
 pre.code .m{color:var(--accent-dim);font-weight:700}
 pre.code .cm{color:var(--faint)}
 
+.args{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px;
+  margin-top:28px;text-align:left}
+.arg{padding:21px 20px;border:1px solid var(--line);border-radius:13px;background:var(--bg)}
+.arg h3{font-size:15px;font-weight:650;margin-bottom:9px;letter-spacing:-.012em}
+.arg p{color:var(--dim);font-size:13.4px;line-height:1.6;margin:0 0 10px}
+.arg p:last-child{margin-bottom:0}
+.arg .big{font-size:26px;font-weight:700;color:var(--accent);letter-spacing:-.022em;
+  line-height:1.1;margin-bottom:4px;display:block}
+.arg .cap{font-size:12.4px;color:var(--faint);line-height:1.5;display:block;margin-bottom:12px}
+.arg em{color:var(--fg);font-style:normal;font-weight:600}
+.against{margin-top:30px;padding:22px 22px;border:1px dashed var(--line);border-radius:13px;
+  text-align:left;background:transparent}
+.against h3{font-size:14.5px;font-weight:650;margin-bottom:6px}
+.against p{color:var(--dim);font-size:13.3px;line-height:1.6;margin:0 0 9px}
+.against ul{margin:10px 0 0;padding-left:19px;color:var(--dim);font-size:13.3px;line-height:1.65}
+.against li{margin-bottom:7px}
+.against b{color:var(--fg);font-weight:600}
 .cmp{width:100%;border-collapse:separate;border-spacing:0;margin-top:26px;font-size:13.6px;
   text-align:left}
 .cmp th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
@@ -446,7 +463,7 @@ async function api(path,opts={}){
 /* ---------------- sign in ---------------- */
 
 
-const LAND = {why:'Why', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
+const LAND = {why:'Why', motivation:'Motivation', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
 let hits=[], filter='all', lastQ='';
 
 const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -537,7 +554,75 @@ function signin(msg){
       </div>
     </section>
 
-    <section id="search">
+    <section id="motivation">
+      <div class="wrap center">
+        <div class="kicker">Motivation</div>
+        <h2 class="sec">The gap is widening, not closing</h2>
+        <p class="secsub">Every dependency tool rests on one assumption: dependencies are
+          versioned, and change is an explicit act. You pin, you review a diff, you upgrade
+          deliberately. That assumption is quietly failing.</p>
+
+        <div class="args">
+          <div class="arg">
+            <h3>Hosted models break versioning outright</h3>
+            <span class="big">52% → 10%</span>
+            <span class="cap">GPT-4's direct code-execution success rate over three months,
+              March–June 2023, <em>with no version change</em>.</span>
+            <p>Providers update weights, safety tuning and serving infrastructure without changing
+              the endpoint or the identifier. The dependency changes underneath you and no
+              artifact records it — so there is nothing for a lockfile to pin or a diff to show.</p>
+          </div>
+
+          <div class="arg">
+            <h3>AI-written code is a new defect class</h3>
+            <span class="big">19.7%</span>
+            <span class="cap">of AI-suggested packages do not exist, across a 576,000-sample
+              study. Open-source models average 21.7%; the worst measured exceed 33%.</span>
+            <p>The finding that turns this from a quality problem into a supply-chain attack:
+              re-running identical prompts ten times, <em>43% of hallucinated package names
+              reappeared every time</em>. Stable hallucinations are predictable, and predictable
+              names are registrable by somebody else.</p>
+          </div>
+
+          <div class="arg">
+            <h3>Volume decouples from review</h3>
+            <p>Generated code grows faster than the capacity to review it. The number of changes
+              a team ships per reviewer-hour keeps rising, and the reviewing does not scale with
+              it — so more defects arrive through a channel nobody reads closely.</p>
+            <p>Agents add failure modes nothing catalogs at all: a tool call that silently
+              changes behaviour has no advisory, no CVE and no changelog entry.</p>
+          </div>
+
+          <div class="arg">
+            <h3>Regulation pulls the wrong way</h3>
+            <p>Compliance regimes push toward <em>inventory</em> — prove you know what is in
+              your software — and inventory is exactly the thing that produces a 92% false
+              positive rate. Knowing a package is present is not knowing you are affected.</p>
+            <p>The pressure is therefore toward more alerts, not fewer, and the gap between what
+              is reported and what matters keeps widening.</p>
+          </div>
+        </div>
+
+        <div class="against">
+          <h3>What argues against all of this</h3>
+          <p>Included because an argument that only presents one side is worth less than nothing.</p>
+          <ul>
+            <li><b>Reachability is being commoditised.</b> Endor Labs, Snyk and Semgrep all ship
+              it and market it on exactly this alert-fatigue argument. The 92% figure is a known
+              problem under active attack by funded incumbents. BugMine is not first.</li>
+            <li><b>The raw material is free.</b> NVD, OSV and GitHub Advisory are public.
+              Aggregation is not defensible — what BugMine adds has to be the reachability, the
+              non-security bug classes and original discovery, not the collecting.</li>
+            <li><b>Eval platforms already exist.</b> Langfuse, LangSmith, Braintrust and Arize
+              are established. The distinction is real but narrow: they evaluate <em>your
+              application</em>, one customer at a time. None maintains a shared, versioned
+              catalog of model behaviour.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt" id="search">
       <div class="wrap center">
         <div class="kicker">Live catalog</div>
         <h2 class="sec">Search it before you sign up</h2>
@@ -651,7 +736,8 @@ GET  /v1/scans/{id}/findings</pre></div>
           <a href="#search">Search</a><a href="#coverage">Coverage</a>
           <a href="#editor">In your editor</a><a href="#api">API</a></div>
         <div><h4>How</h4>
-          <a href="#why">Why it exists</a><a href="#how">Pipeline</a><span class="li">Reachability</span>
+          <a href="#why">Why it exists</a><a href="#motivation">Motivation</a>
+          <a href="#how">Pipeline</a><span class="li">Reachability</span>
           <span class="li">Citations</span></div>
         <div><h4>Account</h4>
           <a href="#" id="foot-signin">Sign in</a>
