@@ -124,6 +124,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = google_cloud_run_v2_service.extract.uri
       }
       env {
+        name  = "BUGMINE_SCAN_FETCH_URL"
+        value = google_cloud_run_v2_service.scan_fetch.uri
+      }
+      env {
         name  = "BUGMINE_TASK_INVOKER_SA"
         value = google_service_account.worker["dispatcher"].email
       }
@@ -494,4 +498,172 @@ variable "firebase_browser_key" {
   description = "Identity Platform browser API key, injected into the console at serve time."
   type        = string
   default     = ""
+}
+
+# The scan pair, split for the same reason crawl and extract are: fetch reaches an arbitrary
+# repository a tenant named, analyse reads a model. Neither may do both — a model reachable from
+# a process with general egress is what turns prompt injection into exfiltration.
+resource "google_cloud_run_v2_service" "scan_fetch" {
+  name                = "bugmine-scan-fetch"
+  location            = var.region
+  deletion_protection = false
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    service_account = google_service_account.worker["scan_fetch"].email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    # ALL_TRAFFIC so the clone leaves through Cloud NAT, where the RFC1918 and link-local deny
+    # rules apply. PRIVATE_RANGES_ONLY would send public traffic straight out and bypass them.
+    vpc_access {
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.main.id
+      }
+      egress = "ALL_TRAFFIC"
+    }
+
+    containers {
+      image   = local.image
+      command = ["uvicorn"]
+      args    = ["--factory", "bugmine.worker:create_worker_app", "--host", "0.0.0.0", "--port", "8080"]
+
+      # Cloning a repository is disk- and network-bound, and the default allowance is not
+      # enough for a large monorepo.
+      resources {
+        limits = {
+          cpu    = "2"
+          memory = "4Gi"
+        }
+      }
+
+      ports { container_port = 8080 }
+
+      env {
+        name  = "BUGMINE_SNAPSHOT_BUCKET"
+        value = google_storage_bucket.snapshots.name
+      }
+      env {
+        name  = "BUGMINE_SCAN_ANALYZE_URL"
+        value = google_cloud_run_v2_service.scan_analyze.uri
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "BUGMINE_REGION"
+        value = var.region
+      }
+      env {
+        name  = "BUGMINE_TASK_INVOKER_SA"
+        value = google_service_account.worker["dispatcher"].email
+      }
+      env {
+        name  = "BUGMINE_DB_HOST"
+        value = google_sql_database_instance.main.private_ip_address
+      }
+      env {
+        name  = "BUGMINE_DB_USER"
+        value = google_sql_user.app.name
+      }
+      env {
+        name  = "BUGMINE_DB_NAME"
+        value = google_sql_database.bugmine.name
+      }
+      env {
+        name = "BUGMINE_DB_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "google_cloud_run_v2_service" "scan_analyze" {
+  name                = "bugmine-scan-analyze"
+  location            = var.region
+  deletion_protection = false
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    service_account = google_service_account.worker["scan_analyze"].email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    # PRIVATE_RANGES_ONLY: this process reads a tenant's source and talks to a model. It reaches
+    # Cloud SQL and Vertex over Google's network and has no general internet egress, so an
+    # injected instruction that succeeds has nowhere to send anything.
+    vpc_access {
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.main.id
+      }
+      egress = "PRIVATE_RANGES_ONLY"
+    }
+
+    containers {
+      image   = local.image
+      command = ["uvicorn"]
+      args    = ["--factory", "bugmine.worker:create_worker_app", "--host", "0.0.0.0", "--port", "8080"]
+
+      resources {
+        limits = {
+          cpu    = "2"
+          memory = "4Gi"
+        }
+      }
+
+      ports { container_port = 8080 }
+
+      env {
+        name  = "BUGMINE_SNAPSHOT_BUCKET"
+        value = google_storage_bucket.snapshots.name
+      }
+      env {
+        name  = "BUGMINE_MODEL"
+        value = var.extraction_model
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "BUGMINE_REGION"
+        value = var.region
+      }
+      env {
+        name  = "BUGMINE_DB_HOST"
+        value = google_sql_database_instance.main.private_ip_address
+      }
+      env {
+        name  = "BUGMINE_DB_USER"
+        value = google_sql_user.app.name
+      }
+      env {
+        name  = "BUGMINE_DB_NAME"
+        value = google_sql_database.bugmine.name
+      }
+      env {
+        name = "BUGMINE_DB_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
 }

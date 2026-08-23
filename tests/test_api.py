@@ -18,10 +18,13 @@ from bugmine.models import (
     ApiKey,
     BugRecord,
     BugType,
+    Job,
+    JobType,
     LifecycleState,
     PrincipalKind,
     PrivacyScope,
     RecordOrigin,
+    Scan,
     SubjectDomain,
     Team,
 )
@@ -582,3 +585,35 @@ class TestWritesActuallyPersist:
         for route in ('@console.get("/tenant/members"', '@console.get("/usage"'):
             block = source[source.index(route) : source.index("\n\n\n", source.index(route))]
             assert "tenant_db_write" not in block, f"{route} uses a committing session"
+
+
+class TestScanSubmission:
+    def test_a_private_target_is_refused_before_it_reaches_a_queue(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Rejecting at submission rather than in the worker means a denied target never sits
+        in a queue, where the dispatcher would retry it long after the caller was told no."""
+        tenant, _ = two_tenants
+        headers = {"X-BugMine-Key": _issue_key(engine, tenant)}
+        r = client.post(
+            "/v1/scans", headers=headers, json={"repo_url": "http://169.254.169.254/meta"}
+        )
+        assert r.status_code == 422
+
+    def test_findings_are_scoped_to_the_tenant(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Another tenant's scan is absent, not forbidden — a 403 confirms it exists."""
+        a, b = two_tenants
+        with tenant_session(engine, b) as s:
+            job = Job(tenant_id=b, job_type=JobType.SCAN_FETCH, payload={})
+            s.add(job)
+            s.flush()
+            scan = Scan(job_id=job.id, tenant_id=b, repo_ref="https://example.invalid/b.git")
+            s.add(scan)
+            s.flush()
+            other_scan = str(scan.id)
+
+        headers = {"X-BugMine-Key": _issue_key(engine, a)}
+        assert client.get(f"/v1/scans/{other_scan}/findings", headers=headers).json() == []
+        assert all(s["id"] != other_scan for s in client.get("/v1/scans", headers=headers).json())

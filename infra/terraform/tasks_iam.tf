@@ -45,6 +45,20 @@ resource "google_cloud_run_v2_service_iam_member" "invoke_extract" {
   member   = "serviceAccount:${google_service_account.worker["dispatcher"].email}"
 }
 
+resource "google_cloud_run_v2_service_iam_member" "invoke_scan_fetch" {
+  location = google_cloud_run_v2_service.scan_fetch.location
+  name     = google_cloud_run_v2_service.scan_fetch.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.worker["dispatcher"].email}"
+}
+
+resource "google_cloud_run_v2_service_iam_member" "invoke_scan_analyze" {
+  location = google_cloud_run_v2_service.scan_analyze.location
+  name     = google_cloud_run_v2_service.scan_analyze.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.worker["dispatcher"].email}"
+}
+
 # Creating a task that authenticates as another service account requires acting as it.
 resource "google_service_account_iam_member" "api_acts_as_invoker" {
   service_account_id = google_service_account.worker["dispatcher"].name

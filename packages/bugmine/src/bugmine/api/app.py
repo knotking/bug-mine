@@ -45,9 +45,14 @@ from bugmine.models import (
     BugRecord,
     BugType,
     Component,
+    Finding,
+    Job,
+    JobState,
+    JobType,
     Membership,
     PrivacyScope,
     Quota,
+    Scan,
     Source,
     SubjectDomain,
     Team,
@@ -380,6 +385,108 @@ def console_summary(session: Session = Depends(tenant_db)) -> dict[str, object]:
 def list_members(session: Session = Depends(tenant_db)) -> list[S.MemberOut]:
     rows = session.execute(select(Membership, User).join(User, User.id == Membership.user_id)).all()
     return [S.MemberOut(email=u.email, role=m.role.value, joined_at=m.joined_at) for m, u in rows]
+
+
+@console.post("/scans", response_model=S.ScanOut, status_code=202)
+def start_scan(
+    body: S.StartScanIn,
+    session: Session = Depends(tenant_db_write),
+    principal: Principal = Depends(require_principal),
+) -> S.ScanOut:
+    """Queue a repository scan.
+
+    The URL is validated here as well as in the fetch worker. Rejecting at submission means a
+    denied target never reaches a queue, so it cannot be retried by the dispatcher long after
+    the caller was told no.
+    """
+    if rejection := urlguard.check(body.repo_url):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": rejection.code, "message": rejection.message}},
+        )
+
+    job = Job(
+        tenant_id=principal.tenant_id,
+        job_type=JobType.SCAN_FETCH,
+        state=JobState.QUEUED,
+        payload={"repo_url": body.repo_url, "ref": body.ref},
+    )
+    session.add(job)
+    session.flush()
+    scan = Scan(job_id=job.id, tenant_id=principal.tenant_id, repo_ref=body.repo_url)
+    session.add(scan)
+    session.flush()
+
+    tasks.enqueue(
+        tasks.scan_fetch_target(),
+        {
+            "repo_url": body.repo_url,
+            "ref": body.ref,
+            "tenant_id": str(principal.tenant_id),
+            "scan_id": str(scan.id),
+        },
+    )
+    return S.ScanOut(
+        id=str(scan.id),
+        repo_ref=scan.repo_ref,
+        commit_sha=None,
+        created_at=scan.created_at,
+        grounding_complete=scan.grounding_complete,
+        uncovered_components=scan.uncovered_components,
+        findings=0,
+    )
+
+
+@console.get("/scans", response_model=list[S.ScanOut])
+def list_scans(
+    session: Session = Depends(tenant_db),
+    limit: int = Q(default=25, ge=1, le=200),
+) -> list[S.ScanOut]:
+    scans = session.execute(
+        select(Scan).order_by(Scan.created_at.desc()).limit(limit)
+    ).scalars().all()
+    counts = dict(
+        session.execute(
+            select(Finding.scan_id, func.count(Finding.id)).group_by(Finding.scan_id)
+        ).all()
+    )
+    return [
+        S.ScanOut(
+            id=str(s.id),
+            repo_ref=s.repo_ref,
+            commit_sha=s.commit_sha,
+            created_at=s.created_at,
+            grounding_complete=s.grounding_complete,
+            uncovered_components=s.uncovered_components,
+            findings=int(counts.get(s.id, 0)),
+        )
+        for s in scans
+    ]
+
+
+@console.get("/scans/{scan_id}/findings", response_model=list[S.FindingOut])
+def scan_findings(scan_id: str, session: Session = Depends(tenant_db)) -> list[S.FindingOut]:
+    """Findings for one scan, each with the record that grounds it.
+
+    Absent and out-of-scope are indistinguishable: RLS hides another tenant's scan, and an
+    empty list is the same answer a scan with no findings gives.
+    """
+    rows = session.execute(select(Finding).where(Finding.scan_id == scan_id)).scalars().all()
+    components = {c.id: c.canonical_ref for c in session.execute(select(Component)).scalars()}
+    return [
+        S.FindingOut(
+            id=str(f.id),
+            component=components.get(f.component_id, "unknown"),
+            bug_type=f.bug_type,
+            title=f.title,
+            detail=f.detail,
+            reachable=f.reachable,
+            confidence=f.confidence,
+            version_confirmed=f.version_confirmed,
+            citations=[str(c.bug_version_id) for c in f.citations],
+        )
+        for f in rows
+    ]
 
 
 @console.get("/usage", response_model=S.UsageOut)

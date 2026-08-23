@@ -179,6 +179,35 @@ class UsageOut(BaseModel):
     by_purpose: list[UsageLineOut]
 
 
+class StartScanIn(BaseModel):
+    repo_url: str
+    ref: str | None = None
+
+
+class ScanOut(BaseModel):
+    id: str
+    repo_ref: str
+    commit_sha: str | None = None
+    created_at: datetime
+    grounding_complete: bool
+    uncovered_components: int
+    findings: int
+
+
+class FindingOut(BaseModel):
+    id: str
+    component: str
+    bug_type: BugType
+    title: str
+    detail: str | None = None
+    reachable: bool | None = None
+    """None means undetermined — reported with reduced confidence, never suppressed. A stored
+    False would be a claim we never make: a confirmed negative produces no finding at all."""
+    confidence: float
+    version_confirmed: bool
+    citations: list[str]
+
+
 class QuotaOut(BaseModel):
     id: str
     scope: Literal["tenant", "team", "user"]
