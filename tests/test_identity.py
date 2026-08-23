@@ -91,7 +91,7 @@ class TestInvites:
         assert exc.value.code == "invite_email_mismatch"
 
     def test_expired_invites_are_refused(self, engine: Engine) -> None:
-        tid, inv = self._invite(engine)
+        _, inv = self._invite(engine)
         with tenant_session(engine, None) as s:
             row = s.get(Invite, inv.id)
             assert row is not None
