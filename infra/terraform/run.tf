@@ -150,11 +150,77 @@ resource "google_cloud_run_v2_service" "api" {
 # lives in the application: /v1/public/* is a separate route tree restricted to public-scope
 # records, and every other route resolves a principal from an API key before touching data.
 # Row-level security is the second layer beneath both.
+variable "allow_public_api" {
+  description = <<-EOT
+    Grant roles/run.invoker to allUsers so anonymous public search (FR-73) is reachable.
+
+    Defaults false because the buildgeek.ai org enforces
+    constraints/iam.allowedPolicyMemberDomains, which rejects allUsers outright. Leaving this
+    on makes every apply fail on a binding that cannot succeed. Set true once an org-policy
+    exception exists for this project, or replace with a load balancer.
+  EOT
+  type        = bool
+  default     = false
+}
+
 resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  count    = var.allow_public_api ? 1 : 0
   location = google_cloud_run_v2_service.api.location
   name     = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# Verification runs in the VPC for the same reason migrations do: the database has no public
+# IP, and the properties being checked only mean anything against the real one. A local pass
+# says nothing about Cloud SQL, where the application role's grants differ.
+resource "google_cloud_run_v2_job" "verify" {
+  name                = "bugmine-verify"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    template {
+      service_account = google_service_account.worker["dispatcher"].email
+      max_retries     = 0
+      timeout         = "300s"
+
+      vpc_access {
+        network_interfaces {
+          network    = google_compute_network.main.id
+          subnetwork = google_compute_subnetwork.main.id
+        }
+        egress = "PRIVATE_RANGES_ONLY"
+      }
+
+      containers {
+        image   = local.image
+        command = ["bugmine-verify"]
+
+        env {
+          name  = "BUGMINE_DB_HOST"
+          value = google_sql_database_instance.main.private_ip_address
+        }
+        env {
+          name  = "BUGMINE_DB_USER"
+          value = google_sql_user.app.name
+        }
+        env {
+          name  = "BUGMINE_DB_NAME"
+          value = google_sql_database.bugmine.name
+        }
+        env {
+          name = "BUGMINE_DB_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.db_password.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 # --- Workers ---------------------------------------------------------------------------

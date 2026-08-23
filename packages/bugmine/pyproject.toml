@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 bugmine = "bugmine.cli:main"
 bugmine-mcp = "bugmine.mcp_server:main"
+bugmine-verify = "bugmine.verify:main"
 
 [build-system]
 requires = ["hatchling"]
