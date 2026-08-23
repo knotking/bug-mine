@@ -96,3 +96,15 @@ class ErrorBody(BaseModel):
 
 class ErrorOut(BaseModel):
     error: ErrorBody
+
+
+class CrawlTriggerIn(BaseModel):
+    url: str
+    subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
+    component_ref: str | None = None
+    ecosystem: str | None = None
+
+
+class JobHandleOut(BaseModel):
+    task: str
+    queued: bool

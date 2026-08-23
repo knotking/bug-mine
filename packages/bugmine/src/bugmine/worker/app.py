@@ -75,9 +75,27 @@ def do_crawl(body: CrawlRequest, request: Request) -> dict[str, Any]:
         _finish_job(app, job_id, JobState.FAILED, str(exc)[:500])
         raise HTTPException(status_code=502, detail={"error": {"code": "fetch_failed"}}) from exc
 
+    # Chain extraction only when the fetch produced something new. This is where the dedup
+    # gate turns into money saved: an unchanged source enqueues nothing and spends no tokens.
+    chained = False
+    if result.changed and os.environ.get("BUGMINE_EXTRACT_URL"):
+        from bugmine import tasks
+
+        tasks.enqueue(
+            tasks.extract_target(),
+            {
+                "artifact_uri": result.uri,
+                "subject_domain": body.subject_domain.value,
+                "component_ref": body.component_ref,
+                "ecosystem": body.ecosystem,
+            },
+        )
+        chained = True
+
     _finish_job(app, job_id, JobState.SUCCEEDED)
     return {
         "job_id": str(job_id),
+        "chained_extraction": chained,
         "artifact_uri": result.uri,
         "content_hash": result.content_hash,
         "bytes": result.bytes_fetched,

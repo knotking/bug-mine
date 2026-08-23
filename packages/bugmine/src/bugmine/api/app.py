@@ -11,13 +11,16 @@ carried over from that contract:
 
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi import Query as Q
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bugmine import tasks
 from bugmine.api import schemas as S
 from bugmine.api.deps import Principal, anonymous_session, require_principal, tenant_db
 from bugmine.catalog import Query, retrieve
@@ -171,12 +174,57 @@ def check_dependencies(
     return S.DependencyCheckOut(matches=matches, not_covered=not_covered, checked_at=now)
 
 
+ingest = APIRouter(prefix="/v1/admin/ingest", tags=["admin"])
+
+
+def _require_operator(authorization: str | None = Header(default=None)) -> None:
+    """Operator gate for ingestion triggers.
+
+    A shared secret rather than a role, because the operator role is designed but not built.
+    That is a deliberate interim: it keeps the trigger off the tenant key path entirely, so no
+    customer credential can start a crawl, and it is one obvious thing to replace when
+    operator identity lands. Compared in constant time.
+    """
+    expected = os.environ.get("BUGMINE_OPERATOR_TOKEN")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": {"code": "operator_disabled", "message": "No operator token set."}},
+        )
+    supplied = (authorization or "").removeprefix("Bearer ").strip()
+    if not secrets.compare_digest(supplied, expected):
+        raise HTTPException(
+            status_code=401,
+            detail={"error": {"code": "unauthenticated", "message": "Operator token required."}},
+        )
+
+
+@ingest.post("/crawl", dependencies=[Depends(_require_operator)])
+def trigger_crawl(body: S.CrawlTriggerIn) -> S.JobHandleOut:
+    """Enqueue a crawl. Extraction is chained by the crawl worker, but only if content changed.
+
+    Chaining there rather than here is what makes the dedup gate save money: an unchanged
+    source costs one HTTP request and no tokens, because nothing downstream is ever enqueued.
+    """
+    name = tasks.enqueue(
+        tasks.crawl_target(),
+        {
+            "url": body.url,
+            "subject_domain": body.subject_domain.value,
+            "component_ref": body.component_ref,
+            "ecosystem": body.ecosystem,
+        },
+    )
+    return S.JobHandleOut(task=name, queued=True)
+
+
 def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     app = FastAPI(title="BugMine API", version="1.0.0")
     app.state.engine = engine or make_engine()
     app.include_router(public)
     app.include_router(catalog)
     app.include_router(check)
+    app.include_router(ingest)
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

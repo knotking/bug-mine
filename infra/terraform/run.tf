@@ -108,6 +108,35 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "BUGMINE_REGION"
+        value = var.region
+      }
+      env {
+        name  = "BUGMINE_CRAWL_URL"
+        value = google_cloud_run_v2_service.crawl.uri
+      }
+      env {
+        name  = "BUGMINE_EXTRACT_URL"
+        value = google_cloud_run_v2_service.extract.uri
+      }
+      env {
+        name  = "BUGMINE_TASK_INVOKER_SA"
+        value = google_service_account.worker["dispatcher"].email
+      }
+      env {
+        name = "BUGMINE_OPERATOR_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.operator_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
         name  = "BUGMINE_DB_HOST"
         value = google_sql_database_instance.main.private_ip_address
       }
@@ -264,6 +293,22 @@ resource "google_cloud_run_v2_service" "crawl" {
       env {
         name  = "BUGMINE_ARTIFACT_BUCKET"
         value = google_storage_bucket.artifacts.name
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "BUGMINE_REGION"
+        value = var.region
+      }
+      env {
+        name  = "BUGMINE_EXTRACT_URL"
+        value = google_cloud_run_v2_service.extract.uri
+      }
+      env {
+        name  = "BUGMINE_TASK_INVOKER_SA"
+        value = google_service_account.worker["dispatcher"].email
       }
       env {
         name  = "BUGMINE_DB_HOST"
