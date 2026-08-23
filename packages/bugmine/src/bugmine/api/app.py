@@ -286,6 +286,42 @@ def trigger_crawl(body: S.CrawlTriggerIn) -> S.JobHandleOut:
     return S.JobHandleOut(task=name, queued=True)
 
 
+@ingest.post("/sources", dependencies=[Depends(_require_operator)], status_code=201)
+def add_system_source(body: S.SourceIn, request: Request) -> S.SourceOut:
+    """Register a source for the **shared** catalog.
+
+    Distinct from the tenant route, and the distinction is not cosmetic. A tenant's own source
+    is private to them and swept under their scope; the public catalog is system-owned, and a
+    system sweep — which runs with no tenant context — cannot see tenant rows at all. Adding a
+    shared source through the console endpoint therefore registers it successfully and it is
+    never crawled, with nothing to say why.
+    """
+    if rejection := urlguard.check(body.url):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": rejection.code, "message": rejection.message}},
+        )
+    with tenant_session(request.app.state.engine, None) as session:
+        src = sweep_mod.add_source(
+            session,
+            url=body.url,
+            subject_domain=body.subject_domain,
+            component_ref=body.component_ref,
+            ecosystem=body.ecosystem,
+            privacy_scope=PrivacyScope.PUBLIC,
+        )
+        return S.SourceOut(
+            id=str(src.id),
+            url=src.url,
+            subject_domain=src.subject_domain,
+            component_ref=src.component_ref,
+            ecosystem=src.ecosystem,
+            enabled=src.enabled,
+            last_attempt_at=src.last_attempt_at,
+            last_success_at=src.last_success_at,
+        )
+
+
 @ingest.post("/extract", dependencies=[Depends(_require_operator)])
 def trigger_extract(body: S.ExtractTriggerIn) -> S.JobHandleOut:
     """Re-extract an artifact already in storage.

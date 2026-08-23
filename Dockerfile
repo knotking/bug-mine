@@ -7,6 +7,13 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
+# git is a runtime dependency, not a build one: the scan fetcher shells out to it to clone a
+# tenant's repository. Without it the worker starts cleanly and every scan fails at the clone
+# with FileNotFoundError, which reads as a bug in our code rather than a missing package.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.6.12 /uv /usr/local/bin/uv
 
 WORKDIR /app
