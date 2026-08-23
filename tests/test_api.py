@@ -403,3 +403,15 @@ class TestRetractedRecordsAreNotSearchable:
         assert after["by_type"] == {}
         # The component row survives retraction; coverage must not.
         assert after["components"] == 0
+
+
+class TestConsoleIsNotCached:
+    def test_the_console_is_served_no_store(self, client: TestClient) -> None:
+        """One unversioned document holding all the HTML, CSS and JS, with no build step and no
+        content-hashed name. Without this the browser keeps the copy it already has, so a
+        deployed fix never arrives — and a still-broken page looks identical to a fix that did
+        not work, which cost three deploys' worth of wrong diagnoses.
+        """
+        r = client.get("/console")
+        assert r.status_code == 200
+        assert "no-store" in r.headers.get("cache-control", "")

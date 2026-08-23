@@ -17,7 +17,7 @@ import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi import Query as Q
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
@@ -473,7 +473,7 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     _console = Path(__file__).parent / "static" / "console.html"
 
     @app.get("/console", include_in_schema=False, response_class=HTMLResponse)
-    def console_page() -> str:
+    def console_page(response: Response) -> str:
         """Serve the console with its Firebase project key substituted in.
 
         Injected rather than committed so the same image serves any environment, and read at
@@ -482,6 +482,12 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
         that signs in — but it is environment-specific, which is reason enough not to hardcode
         it into the page.
         """
+        # The console is a single unversioned document — HTML, CSS and JS in one file with no
+        # build step and no content-hashed name. Without this, a browser keeps serving the copy
+        # it already has and a deployed fix simply does not arrive: a fixed Sign out button
+        # stayed invisible through three deploys because the page was never re-fetched, and
+        # nothing distinguished that from the fix not working.
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
         return _console.read_text().replace(
             "__FIREBASE_BROWSER_KEY__", os.environ.get("BUGMINE_FIREBASE_BROWSER_KEY", "")
         )
