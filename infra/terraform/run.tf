@@ -143,6 +143,20 @@ resource "google_cloud_run_v2_service" "api" {
   depends_on = [google_cloud_run_v2_job.migrate]
 }
 
+# The service is reachable without Cloud Run IAM, and enforces its own authentication.
+#
+# This is deliberate, not a relaxation. FR-73 requires anonymous public search, so an IAM gate
+# in front of the whole service would make that requirement unimplementable. Authorization
+# lives in the application: /v1/public/* is a separate route tree restricted to public-scope
+# records, and every other route resolves a principal from an API key before touching data.
+# Row-level security is the second layer beneath both.
+resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  location = google_cloud_run_v2_service.api.location
+  name     = google_cloud_run_v2_service.api.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
 output "api_url" {
   value = google_cloud_run_v2_service.api.uri
 }
