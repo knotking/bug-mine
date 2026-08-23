@@ -190,7 +190,7 @@ function signin(msg){
         <input id="em" type="email" autocomplete="username" autofocus></div>
       <div class="field"><label for="pw">Password</label>
         <input id="pw" type="password" autocomplete="current-password"></div>
-      <button class="btn" id="go">Sign in</button>
+      <button class="btn" id="signin-go">Sign in</button>
     </form>
     <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
     <p class="note">Accounts are created by invitation.
@@ -212,7 +212,7 @@ function signin(msg){
 
   document.getElementById('f').onsubmit=async e=>{
     e.preventDefault();
-    const btn=document.getElementById('go');
+    const btn=document.getElementById('signin-go');
     btn.disabled=true; btn.textContent='Signing in…';
     try{
       /* Identity Platform holds the password; it is never sent to BugMine. */
@@ -293,7 +293,7 @@ const VIEWS={
       <div class="bar" style="margin-top:10px">
         <select id="eco"><option value="pypi">pypi</option><option value="npm">npm</option></select>
         <button class="btn" id="run">Check</button></div>
-      <div id="out"></div>`;
+      <div id="dep-results"></div>`;
   },
   async sources(){
     const rows=await api('/v1/sources');
@@ -346,7 +346,7 @@ async function search(){
 }
 
 async function check(){
-  const eco=document.getElementById('eco').value, out=document.getElementById('out');
+  const eco=document.getElementById('eco').value, out=document.getElementById('dep-results');
   const deps=document.getElementById('deps').value.split('\n').map(l=>l.trim()).filter(Boolean)
     .map(l=>{const m=l.match(/^([A-Za-z0-9@._\/-]+?)\s*(?:==|@|\s)\s*v?([0-9][^\s]*)$/);
       return m?{ecosystem:eco,name:m[1],version:m[2]}:{ecosystem:eco,name:l,version:null};});
