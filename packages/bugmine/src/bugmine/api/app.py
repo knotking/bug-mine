@@ -177,13 +177,19 @@ def check_dependencies(
 ingest = APIRouter(prefix="/v1/admin/ingest", tags=["admin"])
 
 
-def _require_operator(authorization: str | None = Header(default=None)) -> None:
+def _require_operator(
+    x_bugmine_operator: str | None = Header(default=None, alias="X-BugMine-Operator"),
+) -> None:
     """Operator gate for ingestion triggers.
 
     A shared secret rather than a role, because the operator role is designed but not built.
-    That is a deliberate interim: it keeps the trigger off the tenant key path entirely, so no
-    customer credential can start a crawl, and it is one obvious thing to replace when
-    operator identity lands. Compared in constant time.
+    It keeps the trigger off the tenant key path entirely, so no customer credential can start
+    a crawl — which matters because a crawl fetches an arbitrary URL with our egress.
+
+    On a **dedicated header, not `Authorization`**: Cloud Run consumes `Authorization` for its
+    own IAM check, and this deployment must be invoked with an identity token because the org
+    policy forbids anonymous access. Two different credentials cannot share one header, so the
+    operator secret needs its own.
     """
     expected = os.environ.get("BUGMINE_OPERATOR_TOKEN")
     if not expected:
@@ -191,7 +197,7 @@ def _require_operator(authorization: str | None = Header(default=None)) -> None:
             status_code=503,
             detail={"error": {"code": "operator_disabled", "message": "No operator token set."}},
         )
-    supplied = (authorization or "").removeprefix("Bearer ").strip()
+    supplied = (x_bugmine_operator or "").strip()
     if not secrets.compare_digest(supplied, expected):
         raise HTTPException(
             status_code=401,

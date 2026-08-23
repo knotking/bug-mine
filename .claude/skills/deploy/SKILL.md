@@ -156,6 +156,8 @@ and they will recur on a fresh environment.
 | Cloud Build wants `roles/storage.admin` | It defaults to a Google-owned logs bucket. Use `logging: CLOUD_LOGGING_ONLY` rather than granting it |
 | `403 Forbidden` with an HTML body from the API | Cloud Run IAM, not the app. The org policy `iam.allowedPolicyMemberDomains` forbids `allUsers`, so the public route tree is unreachable from outside the org — see [Public access is blocked](#public-access-is-blocked) |
 | `relation "bug_record" does not exist` | Migrations did not run. The job can report a terminal state while having failed |
+| An app-level token sent on `Authorization` never arrives | Cloud Run consumes that header for its own IAM check. Since the org policy forces authenticated invocation, any second credential needs its own header — the operator token uses `X-BugMine-Operator` |
+| `new row violates row-level security policy` from admin commands | The session had no tenant context. Anything touching `team`, `membership`, `api_key`, `job` or `scan` must be scoped first; only `invite` is readable without it, because its hashed token is the credential |
 
 ### Why the build is awkward
 
@@ -189,8 +191,34 @@ increasing order of effort:
 Until one is chosen, test the deployed API with `gcloud auth print-identity-token` as a bearer
 token.
 
+## Triggering ingestion
+
+```bash
+TOKEN=$(gcloud auth print-identity-token)                       # Cloud Run IAM
+OP=$(gcloud secrets versions access latest \
+       --secret=bugmine-operator-token --project=bugmine-dev)   # operator gate
+
+curl -X POST "$(cd infra/terraform && terraform output -raw api_url)/v1/admin/ingest/crawl" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-BugMine-Operator: $OP" \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://api.github.com/repos/OWNER/REPO/releases","component_ref":"repo","ecosystem":"pypi"}'
+```
+
+Extraction is chained by the crawl worker **only when the content hash changed**, so
+re-triggering an unchanged source costs one HTTP request and no tokens.
+
+## Provisioning a tenant
+
+```bash
+gcloud run jobs execute bugmine-admin --region=us-central1 --project=bugmine-dev --wait \
+  --args="tenant,create,--name,Acme,--slug,acme,--admin-email,you@acme.test"
+```
+
+Locally, `bugmine-admin` runs against `BUGMINE_DATABASE_URL` directly.
+
 ## What is not deployed yet
 
-Only the API service and the migration job. The crawl, extract, scan_fetch and scan_analyze
-workers have queues and service accounts but no Cloud Run jobs — their egress split is defined
-in `network.tf` and `iam.tf` and will need `vpc_access` blocks matching it when they land.
+`scan_fetch` and `scan_analyze` have queues, service accounts and an egress split defined but
+no code. Those are the workers that will need the jobs-plus-dispatcher shape, because a scan
+can exceed a request timeout where crawl and extract cannot.
