@@ -213,52 +213,73 @@ h2{font-size:19px;letter-spacing:-.015em;font-weight:650;margin-bottom:3px}
   .skel{animation:shimmer 1.3s ease-in-out infinite}
   @keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
 }
-/* ---------- landing ---------- */
-.land{min-height:100vh;display:grid;grid-template-columns:1.15fr .85fr;position:relative;
-  overflow:hidden}
-.land-left{padding:clamp(28px,5vw,64px);display:flex;flex-direction:column;justify-content:center;
-  position:relative;z-index:1}
-.land-right{padding:clamp(24px,4vw,48px);display:grid;place-items:center;position:relative;
-  z-index:1;border-left:1px solid var(--line);background:var(--panel)}
-@media(max-width:900px){
-  .land{grid-template-columns:1fr}
-  .land-right{border-left:0;border-top:1px solid var(--line)}
-  .land-left{padding-bottom:8px}
-}
-.eyebrow{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;
-  padding:5px 11px 5px 8px;border-radius:999px;border:1px solid var(--line);
-  background:var(--accent-soft);color:var(--accent-dim);font-size:12px;font-weight:600;
-  letter-spacing:.01em;margin-bottom:20px}
-.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
-h1.hero{font-size:clamp(30px,4.4vw,50px);line-height:1.05;letter-spacing:-.032em;font-weight:680;
-  margin-bottom:16px;max-width:15ch}
-h1.hero em{font-style:normal;background:linear-gradient(100deg,var(--accent),var(--accent-dim));
+/* ---------- landing: full page, search first ---------- */
+.land{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow-x:hidden}
+.topbar{display:flex;align-items:center;gap:14px;padding:18px clamp(18px,4vw,44px);
+  position:relative;z-index:30}
+.topbar .spacer{margin-left:auto}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:clamp(20px,4vw,40px) clamp(18px,4vw,44px) 60px;text-align:center;position:relative;
+  z-index:1}
+.hero-wrap{width:100%;max-width:880px}
+h1.hero{font-size:clamp(34px,6.4vw,68px);line-height:1.02;letter-spacing:-.036em;font-weight:700;
+  margin-bottom:18px}
+h1.hero em{font-style:normal;background:linear-gradient(100deg,var(--accent),var(--accent-dim) 60%,var(--breaking));
   -webkit-background-clip:text;background-clip:text;color:transparent}
-.lede{font-size:clamp(15px,1.5vw,17.5px);color:var(--dim);line-height:1.6;max-width:52ch;
-  margin-bottom:28px}
-.figures{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:30px}
-.fig .v{font-size:27px;font-weight:660;letter-spacing:-.022em;font-variant-numeric:tabular-nums;
-  line-height:1.1}
-.fig .k{font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.055em;
-  margin-top:3px;font-weight:600}
-.points{display:grid;gap:11px;margin-bottom:8px}
-.point{display:flex;gap:11px;align-items:flex-start;font-size:14px;color:var(--dim);
-  line-height:1.5;max-width:56ch}
-.point svg{flex:none;width:17px;height:17px;margin-top:2px;color:var(--accent)}
-.point b{color:var(--fg);font-weight:600}
-/* The live demo: the catalog is public, so a visitor can query it before signing in. */
-.try{margin-top:26px;max-width:520px}
-.try .bar{display:flex;gap:8px;margin-bottom:10px}
-.try input{flex:1}
-.try-out{display:grid;gap:7px;max-height:210px;overflow-y:auto}
-.hit{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;
-  border:1px solid var(--line);background:var(--panel);font-size:13px}
-.hit .c{font-weight:600}
-.hit .t{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-.chip{padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:transparent;
-  color:var(--dim);font-size:12px;cursor:pointer;transition:all .12s ease}
+.lede{font-size:clamp(15px,1.7vw,19px);color:var(--dim);line-height:1.55;max-width:60ch;
+  margin:0 auto 34px}
+/* The search is the product, so it is the largest thing on the page. */
+.bigsearch{position:relative;max-width:660px;margin:0 auto 14px}
+.bigsearch input{width:100%;height:62px;padding:0 116px 0 52px;font-size:17px;border-radius:14px;
+  border:1px solid var(--line);background:var(--panel);color:var(--fg);
+  box-shadow:var(--raise-lg);transition:border-color .14s ease,box-shadow .14s ease}
+.bigsearch input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 4px var(--glow),var(--raise-lg)}
+.bigsearch .mag{position:absolute;left:19px;top:50%;transform:translateY(-50%);width:19px;
+  height:19px;color:var(--faint);pointer-events:none}
+.bigsearch .go{position:absolute;right:8px;top:8px;height:46px;padding:0 20px;border-radius:10px;
+  border:0;background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:600;
+  font-size:14.5px;cursor:pointer;transition:filter .12s ease}
+.bigsearch .go:hover{filter:brightness(1.08)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-bottom:26px}
+.chip{padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;
+  color:var(--dim);font-size:12.5px;font-family:inherit;cursor:pointer;
+  transition:border-color .12s ease,color .12s ease}
 .chip:hover{border-color:var(--accent);color:var(--accent)}
+.results{max-width:760px;margin:0 auto;text-align:left;display:grid;gap:8px}
+.hit{display:flex;align-items:center;gap:11px;padding:12px 15px;border-radius:11px;
+  border:1px solid var(--line);background:var(--panel);font-size:13.5px;
+  box-shadow:var(--raise);animation:rise .32s cubic-bezier(.16,1,.3,1) both}
+.hit .c{font-weight:650;white-space:nowrap}
+.hit .t{color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.hit .v{font-size:12px;color:var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums}
+.figures{display:flex;gap:clamp(24px,5vw,56px);justify-content:center;flex-wrap:wrap;
+  margin-top:44px;padding-top:30px;border-top:1px solid var(--line);max-width:760px;
+  margin-inline:auto}
+.fig .v{font-size:clamp(24px,3vw,32px);font-weight:680;letter-spacing:-.024em;
+  font-variant-numeric:tabular-nums;line-height:1.05}
+.fig .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;
+  margin-top:5px;font-weight:600}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;padding:5px 12px 5px 9px;
+  border-radius:999px;border:1px solid var(--line);background:var(--accent-soft);
+  color:var(--accent-dim);font-size:12px;font-weight:600;margin-bottom:22px}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+@media(prefers-reduced-motion:no-preference){
+  .eyebrow .dot{animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+}
+/* Sign-in lives behind the top-right button and only takes the screen when asked for. */
+.sheet{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:22px;
+  background:rgba(10,10,16,.55);backdrop-filter:blur(4px)}
+.sheet[hidden]{display:none}
+.sheet-card{width:100%;max-width:396px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:26px 26px 22px;box-shadow:var(--raise-lg);position:relative}
+@media(prefers-reduced-motion:no-preference){
+  .sheet-card{animation:rise .28s cubic-bezier(.16,1,.3,1) both}
+}
+.sheet-x{position:absolute;top:12px;right:12px;width:30px;height:30px;border:0;border-radius:8px;
+  background:transparent;color:var(--faint);font-size:19px;line-height:1;cursor:pointer}
+.sheet-x:hover{background:var(--accent-soft);color:var(--fg)}
 </style>
 
 <div class="theme" role="group" aria-label="Colour theme">
@@ -322,72 +343,83 @@ async function api(path,opts={}){
 }
 
 /* ---------------- sign in ---------------- */
-const TICK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-  stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>`;
 
 function signin(msg){
   app.innerHTML=`<div class="land">
     <div class="auth-grid"></div>
-    <div class="land-left">
+
+    <div class="topbar">
       <div class="mark">${LOGO}<h1>BugMine</h1></div>
-      <span class="eyebrow"><span class="dot"></span>Catalog live &amp; crawling</span>
-      <h1 class="hero">Every dependency breaks. <em>Know which ones break you.</em></h1>
-      <p class="lede">Scanners tell you a package has a defect. BugMine tells you whether your
-        code ever touches it — and catalogs the breaking changes, deprecations and regressions
-        that never get a CVE at all.</p>
+      <span class="spacer"></span>
+      <button class="btn" id="open-signin" style="width:auto;padding:9px 18px">Sign in</button>
+    </div>
 
-      <div class="figures" id="figs">
-        <div class="fig"><div class="v">—</div><div class="k">records</div></div>
-        <div class="fig"><div class="v">—</div><div class="k">components</div></div>
-        <div class="fig"><div class="v">—</div><div class="k">beyond CVEs</div></div>
-      </div>
+    <div class="stage">
+      <div class="hero-wrap">
+        <span class="eyebrow"><span class="dot"></span>Catalog live and crawling</span>
+        <h1 class="hero">Every dependency breaks.<br><em>Know which ones break you.</em></h1>
+        <p class="lede">Breaking changes, deprecations and regressions across everything you
+          depend on — most of which never get a CVE. Search the catalog; no account needed.</p>
 
-      <div class="points">
-        <div class="point">${TICK}<div><b>Reachability, not inventory.</b> A known defect in a
-          package you never call is suppressed, not reported.</div></div>
-        <div class="point">${TICK}<div><b>Beyond security.</b> Deprecations and breaking changes
-          are the majority of what we hold — the part CVE tooling ignores.</div></div>
-        <div class="point">${TICK}<div><b>Every finding cites its record.</b> No ungrounded
-          claims, and "not covered" is said out loud rather than shown as clean.</div></div>
-      </div>
-
-      <div class="try">
-        <div class="sub" style="margin-bottom:8px">Search the public catalog — no account needed.</div>
-        <div class="bar">
-          <input id="pq" placeholder="numpy, sqlalchemy, requests…" autocomplete="off">
-          <button class="btn" id="pgo" style="width:auto;padding:0 18px">Search</button>
+        <div class="bigsearch">
+          ${MAG}
+          <input id="pq" placeholder="Search a package — numpy, sqlalchemy, kafka…"
+                 autocomplete="off" autofocus>
+          <button class="go" id="pgo">Search</button>
         </div>
         <div class="chips">
-          ${['numpy','sqlalchemy','requests','httpx','pytest'].map(c=>
+          ${['numpy','sqlalchemy','requests','httpx','pytest','django','kafka'].map(c=>
             `<button class="chip" data-q="${c}">${c}</button>`).join('')}
         </div>
-        <div class="try-out" id="pout"></div>
+
+        <div class="results" id="pout"></div>
+
+        <div class="figures" id="figs">
+          <div class="fig"><div class="v">—</div><div class="k">records</div></div>
+          <div class="fig"><div class="v">—</div><div class="k">components</div></div>
+          <div class="fig"><div class="v">—</div><div class="k">beyond CVEs</div></div>
+        </div>
       </div>
     </div>
 
-    <div class="land-right"><div class="auth-card">
-      <h2 style="margin-bottom:4px">Sign in</h2>
-      <p class="sub" style="margin-bottom:20px">Accounts are created by invitation.</p>
-      <form id="f">
-        <div class="field"><label for="em">Email</label>
-          <input id="em" type="email" autocomplete="username"></div>
-        <div class="field"><label for="pw">Password</label>
-          <input id="pw" type="password" autocomplete="current-password"></div>
-        <button class="btn" id="signin-go">Sign in</button>
-      </form>
-      <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
-      <p class="note"><a href="#" id="usekey">Sign in with an API key instead</a></p>
-      <form id="kf" style="display:none;margin-top:12px">
-        <div class="field"><label for="k">API key</label>
-          <input id="k" type="password" placeholder="bmk_…" autocomplete="off"></div>
-        <button class="btn ghost">Use key</button>
-      </form>
-    </div></div>
+    <div class="sheet" id="sheet" hidden>
+      <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Sign in">
+        <button class="sheet-x" id="sheet-x" aria-label="Close">&times;</button>
+        <div class="mark" style="margin-bottom:14px">${LOGO}<h1 style="font-size:18px">Sign in</h1></div>
+        <p class="sub" style="margin-bottom:18px">Accounts are created by invitation.</p>
+        <form id="f">
+          <div class="field"><label for="em">Email</label>
+            <input id="em" type="email" autocomplete="username"></div>
+          <div class="field"><label for="pw">Password</label>
+            <input id="pw" type="password" autocomplete="current-password"></div>
+          <button class="btn" id="signin-go">Sign in</button>
+        </form>
+        <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
+        <p class="note"><a href="#" id="usekey">Use an API key instead</a></p>
+        <form id="kf" style="display:none;margin-top:12px">
+          <div class="field"><label for="k">API key</label>
+            <input id="k" type="password" placeholder="bmk_…" autocomplete="off"></div>
+          <button class="btn ghost">Use key</button>
+        </form>
+      </div>
+    </div>
   </div>`;
+
+  const sheet=document.getElementById('sheet');
+  const openSheet=()=>{sheet.hidden=false;document.getElementById('em').focus();};
+  const closeSheet=()=>{sheet.hidden=true;};
+  document.getElementById('open-signin').onclick=openSheet;
+  document.getElementById('sheet-x').onclick=closeSheet;
+  // Click-outside and Escape both close it: a dialog that traps you is worse than no dialog.
+  sheet.onclick=e=>{ if(e.target===sheet) closeSheet(); };
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!sheet.hidden) closeSheet(); });
+  if(msg) openSheet();
 
   const err = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display=''; };
 
-  // Real numbers rather than a claim. Public scope only, so nothing here is a tenant's.
+  // Real counts rather than a claim. Public scope only, so nothing here is a tenant's.
   fetch('/v1/public/stats').then(r=>r.json()).then(s=>{
     const n=v=>Number(v||0).toLocaleString();
     document.getElementById('figs').innerHTML=[
@@ -397,25 +429,29 @@ function signin(msg){
 
   async function demo(q){
     const out=document.getElementById('pout');
-    if(!q) return;
-    out.innerHTML='<div class="skel" style="height:38px"></div>';
+    if(!q){ out.innerHTML=''; return; }
+    out.innerHTML='<div class="skel" style="height:44px"></div>';
     try{
-      const r=await fetch(`/v1/public/bugs/search?limit=6&q=${encodeURIComponent(q)}`);
+      const r=await fetch(`/v1/public/bugs/search?limit=8&q=${encodeURIComponent(q)}`);
       const rows=await r.json();
-      out.innerHTML = rows.length ? rows.map(b=>`<div class="hit">
-        <span class="tag t-${esc(b.bug_type)}">${esc(b.bug_type.replace(/_/g,' '))}</span>
-        <span class="c">${esc(b.component.ref)}</span>
-        <span class="t">${esc(b.title)}</span></div>`).join('')
-        : `<div class="empty" style="padding:14px">No coverage for “${esc(q)}” yet — which means
-           we do not know, not that it is healthy.</div>`;
+      out.innerHTML = rows.length ? rows.map(b=>{
+        const a=b.applicability||{};
+        const v=a.introduced_in?`from ${esc(a.introduced_in)}`:(a.fixed_in?`fixed ${esc(a.fixed_in)}`:'');
+        return `<div class="hit" style="--row-accent:var(--${esc(b.bug_type)},var(--accent))">
+          <span class="tag t-${esc(b.bug_type)}">${esc(b.bug_type.replace(/_/g,' '))}</span>
+          <span class="c">${esc(b.component.ref)}</span>
+          <span class="t">${esc(b.title)}</span>
+          <span class="v">${v}</span></div>`;
+      }).join('')
+        : `<div class="empty">No coverage for &ldquo;${esc(q)}&rdquo; yet — which means we do not
+           know about it, not that it is healthy.</div>`;
     }catch{ out.innerHTML='<p class="error">Search is unavailable right now.</p>'; }
   }
-  document.getElementById('pgo').onclick=()=>demo(document.getElementById('pq').value.trim());
-  document.getElementById('pq').addEventListener('keydown',e=>{
-    if(e.key==='Enter') demo(e.target.value.trim());
-  });
+  const qbox=document.getElementById('pq');
+  document.getElementById('pgo').onclick=()=>demo(qbox.value.trim());
+  qbox.addEventListener('keydown',e=>{ if(e.key==='Enter') demo(e.target.value.trim()); });
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{
-    document.getElementById('pq').value=c.dataset.q; demo(c.dataset.q);
+    qbox.value=c.dataset.q; demo(c.dataset.q);
   });
 
   document.getElementById('usekey').onclick=e=>{
