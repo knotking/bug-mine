@@ -157,6 +157,162 @@ resource "google_cloud_run_v2_service_iam_member" "api_public" {
   member   = "allUsers"
 }
 
+# --- Workers ---------------------------------------------------------------------------
+#
+# Two services, not one, because the egress split is the security boundary: crawl fetches
+# untrusted content and holds no model; extract holds a model and cannot reach the network
+# beyond Vertex. Running both in one service would collapse that into a convention.
+
+resource "google_cloud_run_v2_service" "crawl" {
+  name                = "bugmine-crawl"
+  location            = var.region
+  deletion_protection = false
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    service_account = google_service_account.worker["crawl"].email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    # ALL_TRAFFIC so fetches leave through Cloud NAT, where the deny rules for RFC1918 and
+    # link-local apply. PRIVATE_RANGES_ONLY would send public fetches straight out, bypassing
+    # the control entirely.
+    vpc_access {
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.main.id
+      }
+      egress = "ALL_TRAFFIC"
+    }
+
+    containers {
+      image   = local.image
+      command = ["uvicorn"]
+      args    = ["--factory", "bugmine.worker:create_worker_app", "--host", "0.0.0.0", "--port", "8080"]
+
+      ports { container_port = 8080 }
+
+      env {
+        name  = "BUGMINE_ARTIFACT_BUCKET"
+        value = google_storage_bucket.artifacts.name
+      }
+      env {
+        name  = "BUGMINE_DB_HOST"
+        value = google_sql_database_instance.main.private_ip_address
+      }
+      env {
+        name  = "BUGMINE_DB_USER"
+        value = google_sql_user.app.name
+      }
+      env {
+        name  = "BUGMINE_DB_NAME"
+        value = google_sql_database.bugmine.name
+      }
+      env {
+        name = "BUGMINE_DB_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "google_cloud_run_v2_service" "extract" {
+  name                = "bugmine-extract"
+  location            = var.region
+  deletion_protection = false
+  ingress             = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
+  template {
+    service_account = google_service_account.worker["extract"].email
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    # PRIVATE_RANGES_ONLY: this service feeds untrusted content to a model. It reaches Cloud
+    # SQL and Vertex over Google's network and has no general internet egress, so a successful
+    # prompt injection controls the model's output and reaches nothing.
+    vpc_access {
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.main.id
+      }
+      egress = "PRIVATE_RANGES_ONLY"
+    }
+
+    containers {
+      image   = local.image
+      command = ["uvicorn"]
+      args    = ["--factory", "bugmine.worker:create_worker_app", "--host", "0.0.0.0", "--port", "8080"]
+
+      ports { container_port = 8080 }
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "1Gi"
+        }
+      }
+
+      env {
+        name  = "BUGMINE_ARTIFACT_BUCKET"
+        value = google_storage_bucket.artifacts.name
+      }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "BUGMINE_MODEL"
+        value = var.extraction_model
+      }
+      env {
+        name  = "BUGMINE_DB_HOST"
+        value = google_sql_database_instance.main.private_ip_address
+      }
+      env {
+        name  = "BUGMINE_DB_USER"
+        value = google_sql_user.app.name
+      }
+      env {
+        name  = "BUGMINE_DB_NAME"
+        value = google_sql_database.bugmine.name
+      }
+      env {
+        name = "BUGMINE_DB_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+    }
+  }
+}
+
+variable "extraction_model" {
+  type    = string
+  default = "gemini-2.0-flash"
+}
+
+output "crawl_url" {
+  value = google_cloud_run_v2_service.crawl.uri
+}
+
+output "extract_url" {
+  value = google_cloud_run_v2_service.extract.uri
+}
+
 output "api_url" {
   value = google_cloud_run_v2_service.api.uri
 }
