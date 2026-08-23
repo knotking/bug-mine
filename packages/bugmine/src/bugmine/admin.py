@@ -291,20 +291,37 @@ def source_prune(args: argparse.Namespace) -> int:
 
     The oldest rather than the newest: it carries whatever crawl history exists, and dropping it
     would reset `last_success_at` and make a healthy source look like it had never run.
+
+    `--tenant` is required to reach tenant-scoped rows at all. A session with no tenant context
+    cannot see them, so a prune run without it reports success over rows it never examined —
+    which is the same blindness that let the shared catalog be registered under one tenant in
+    the first place.
     """
     from bugmine.models import Source
 
-    removed = 0
-    with tenant_session(_engine(), None) as s:
-        rows = s.execute(select(Source).order_by(Source.created_at.asc())).scalars().all()
+    def _prune(session) -> tuple[int, int]:  # type: ignore[no-untyped-def]
+        rows = session.execute(select(Source).order_by(Source.created_at.asc())).scalars().all()
         seen: set[str] = set()
+        removed = 0
         for row in rows:
+            # Public rows are ordered first by created_at in practice, but the rule does not
+            # depend on that: the first row seen for a URL is kept and any later one dropped.
             if row.url in seen:
-                s.delete(row)
+                session.delete(row)
                 removed += 1
                 continue
             seen.add(row.url)
-    print(f"  removed {removed} duplicate source(s); {len(seen)} unique url(s) remain")
+        return removed, len(seen)
+
+    if getattr(args, "tenant", None):
+        with _for_tenant(args.tenant) as (session, tenant):
+            removed, kept = _prune(session)
+        scope = f"tenant {tenant.slug}"
+    else:
+        with tenant_session(_engine(), None) as session:
+            removed, kept = _prune(session)
+        scope = "the shared catalog"
+    print(f"  removed {removed} source(s) from {scope}; {kept} unique url(s) remain")
     return 0
 
 
@@ -353,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     sl.add_argument("--limit", type=int, default=10)
     sl.set_defaults(func=source_list)
     sp = src.add_parser("prune", help="Remove duplicate registrations of the same url")
+    sp.add_argument("--tenant", help="Also prune this tenant's own sources (slug)")
     sp.set_defaults(func=source_prune)
 
     rec = sub.add_parser("record").add_subparsers(dest="cmd", required=True)
