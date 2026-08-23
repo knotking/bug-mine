@@ -98,6 +98,17 @@ class LifecycleState(StrEnum):
             LifecycleState.DISPUTED,
         }
 
+    @property
+    def visible(self) -> bool:
+        """Whether a record in this state should be returned by search.
+
+        Same set as `grounds_findings`, for the same reason: a retracted record is one we have
+        said should not have been published, and listing it in search republishes it. A
+        candidate has not been confirmed yet, and a superseded one has a successor that should
+        be found instead.
+        """
+        return self.grounds_findings
+
 
 class JobType(StrEnum):
     """One substrate, many job types. Adding a capability adds a member here."""
@@ -123,3 +134,9 @@ class JobState(StrEnum):
             JobState.FAILED,
             JobState.BUDGET_EXCEEDED,
         }
+
+
+VISIBLE_LIFECYCLE_STATES: frozenset[LifecycleState] = frozenset(
+    state for state in LifecycleState if state.visible
+)
+"""States a record is visible in — for `.in_()` clauses that cannot call a Python property."""

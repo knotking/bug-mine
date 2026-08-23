@@ -32,6 +32,7 @@ from bugmine.catalog.reader import current_version
 from bugmine.db import make_engine, tenant_session
 from bugmine.firebase import TokenVerifier
 from bugmine.models import (
+    VISIBLE_LIFECYCLE_STATES,
     ApiKey,
     BugRecord,
     BugType,
@@ -87,7 +88,10 @@ def search_public_bugs(
     bug_type: BugType | None = None,
     limit: int = Q(default=50, ge=1, le=200),
 ) -> list[S.BugOut]:
-    stmt = select(BugRecord).where(BugRecord.privacy_scope == PrivacyScope.PUBLIC)
+    stmt = select(BugRecord).where(
+        BugRecord.privacy_scope == PrivacyScope.PUBLIC,
+        BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES),
+    )
     if subject_domain:
         stmt = stmt.where(BugRecord.subject_domain == subject_domain)
     if bug_type:
@@ -296,7 +300,7 @@ def console_search(
     Distinct from the public route: that one is hard-wired to public scope for anonymous
     callers, this one relies on RLS to widen the result to what the principal is entitled to.
     """
-    stmt = select(BugRecord)
+    stmt = select(BugRecord).where(BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES))
     if bug_type:
         stmt = stmt.where(BugRecord.bug_type == bug_type)
     if q:

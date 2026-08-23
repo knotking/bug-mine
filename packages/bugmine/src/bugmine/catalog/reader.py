@@ -26,12 +26,12 @@ from sqlalchemy.orm import Session
 
 from bugmine.catalog import components
 from bugmine.models import (
+    VISIBLE_LIFECYCLE_STATES,
     Applicability,
     BugRecord,
     BugType,
     BugVersion,
     Component,
-    LifecycleState,
     MatchResult,
     SubjectDomain,
 )
@@ -104,9 +104,7 @@ def retrieve(
 
     stmt = select(BugRecord).where(
         BugRecord.component_id == component.id,
-        BugRecord.lifecycle_state.in_(
-            [LifecycleState.ACTIVE, LifecycleState.FIXED, LifecycleState.DISPUTED]
-        ),
+        BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES),
     )
     if bug_types:
         stmt = stmt.where(BugRecord.bug_type.in_(bug_types))

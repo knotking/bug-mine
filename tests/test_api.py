@@ -12,9 +12,13 @@ import uuid
 
 import pytest
 from bugmine.api import create_app
+from sqlalchemy import select
+
 from bugmine.catalog import IncomingBug, write
 from bugmine.db import tenant_session
 from bugmine.models import (
+    LifecycleState,
+    BugRecord,
     ApiKey,
     BugType,
     PrincipalKind,
@@ -342,3 +346,39 @@ class TestSweepTrigger:
         client.post("/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "secret"})
         client.post("/v1/admin/ingest/sweep", headers={"X-BugMine-Operator": "secret"})
         assert sum(1 for p in sent if p["url"] == url) == 1
+
+
+class TestRetractedRecordsAreNotSearchable:
+    """A retracted record is one we have said should not have been published.
+
+    Leaving it searchable republishes it, which is the whole failure retraction exists to
+    undo — so both search routes must exclude it, not only the matcher used by scans.
+    """
+
+    def _retract_all(self, engine: Engine) -> None:
+        with tenant_session(engine, None) as s:
+            for record in s.execute(select(BugRecord)).scalars():
+                record.lifecycle_state = LifecycleState.RETRACTED
+
+    def test_public_search_excludes_retracted(self, client: TestClient, engine: Engine) -> None:
+        _seed_public_bug(engine, "langchain")
+        assert client.get("/v1/public/bugs/search?q=langchain").json() != []
+        self._retract_all(engine)
+        assert client.get("/v1/public/bugs/search?q=langchain").json() == []
+
+    def test_console_search_excludes_retracted(
+        self,
+        client: TestClient,
+        engine: Engine,
+        two_tenants: tuple[uuid.UUID, uuid.UUID],
+    ) -> None:
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        # A distinct component from the public-search test: records are content-hash deduped,
+        # so re-seeding an identical bug would match the already-retracted row rather than
+        # create a fresh one, and the test would pass for the wrong reason.
+        _seed_public_bug(engine, "langgraph")
+        headers = {"X-BugMine-Key": key}
+        assert client.get("/v1/catalog/search?q=langgraph", headers=headers).json() != []
+        self._retract_all(engine)
+        assert client.get("/v1/catalog/search?q=langgraph", headers=headers).json() == []

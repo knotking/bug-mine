@@ -11,6 +11,7 @@ from bugmine.models.applicability import (
 from bugmine.models.base import Base
 from bugmine.models.catalog import BugRecord, BugVersion, Component, ComponentAlias, Source
 from bugmine.models.enums import (
+    VISIBLE_LIFECYCLE_STATES,
     BugType,
     JobState,
     JobType,
@@ -27,6 +28,7 @@ from bugmine.models.metering import CostBearer, UsageEvent, UsagePurpose
 from bugmine.models.tenancy import ApiKey, Invite, Membership, Team, Tenant, User
 
 __all__ = [
+    "VISIBLE_LIFECYCLE_STATES",
     "ApiKey",
     "Applicability",
     "Base",

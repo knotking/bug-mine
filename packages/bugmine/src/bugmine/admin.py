@@ -190,6 +190,71 @@ def job_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def record_list(args: argparse.Namespace) -> int:
+    """Every catalog record, including ones search hides.
+
+    Deliberately unfiltered by lifecycle state: this is the view an operator needs when
+    deciding what to retract, and it is the one place a retracted record should still show.
+    """
+    from bugmine.models import BugRecord, Component
+
+    with tenant_session(_engine(), None, commit=False) as s:
+        stmt = select(BugRecord).order_by(BugRecord.observed_at.desc()).limit(args.limit)
+        rows = s.execute(stmt).scalars().all()
+        if not rows:
+            print("No records.")
+        for r in rows:
+            component = s.get(Component, r.component_id)
+            ref = component.canonical_ref if component else "?"
+            applicability = r.applicability or {}
+            direction = (
+                f"introduced_in={applicability.get('introduced_in')}"
+                if applicability.get("introduced_in")
+                else f"fixed_in={applicability.get('fixed_in')}"
+            )
+            print(f"  {r.id}  {r.lifecycle_state.value:<10} {r.bug_type.value:<16} {ref}")
+            print(f"      {direction}  {r.title[:90]}")
+    return 0
+
+
+def record_retract(args: argparse.Namespace) -> int:
+    """Retract records, by id or by component.
+
+    Retraction rather than deletion: the record's history is why a later reader can tell that
+    an absence is deliberate rather than a gap in crawling. Retracted records stop grounding
+    findings and stop appearing in search, which is the whole effect wanted here.
+    """
+    from bugmine.models import BugRecord, Component, LifecycleState
+
+    with tenant_session(_engine(), None) as s:
+        stmt = select(BugRecord)
+        if args.id:
+            stmt = stmt.where(BugRecord.id.in_(args.id))
+        elif args.component:
+            component = s.execute(
+                select(Component).where(Component.canonical_ref == args.component.lower())
+            ).scalar_one_or_none()
+            if component is None:
+                print(f"No component {args.component!r}.")
+                return 1
+            stmt = stmt.where(BugRecord.component_id == component.id)
+        else:
+            print("Pass --id or --component.")
+            return 2
+
+        rows = s.execute(stmt).scalars().all()
+        if not rows:
+            print("Nothing matched.")
+            return 1
+        for r in rows:
+            if r.lifecycle_state is LifecycleState.RETRACTED:
+                print(f"  already retracted  {r.id}  {r.title[:70]}")
+                continue
+            r.lifecycle_state = LifecycleState.RETRACTED
+            print(f"  retracted  {r.id}  {r.title[:70]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bugmine-admin", description="BugMine operator tools.")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -229,6 +294,15 @@ def main(argv: list[str] | None = None) -> int:
     jr = j.add_parser("recent", help="Recent jobs and their failure reasons")
     jr.add_argument("--limit", type=int, default=15)
     jr.set_defaults(func=job_recent)
+
+    rec = sub.add_parser("record").add_subparsers(dest="cmd", required=True)
+    rl = rec.add_parser("list", help="Catalog records, including retracted ones")
+    rl.add_argument("--limit", type=int, default=30)
+    rl.set_defaults(func=record_list)
+    rr = rec.add_parser("retract", help="Retract records by id or component")
+    rr.add_argument("--id", nargs="*", default=[])
+    rr.add_argument("--component")
+    rr.set_defaults(func=record_retract)
 
     m = sub.add_parser("member").add_subparsers(dest="cmd", required=True)
     ml = m.add_parser("list")
