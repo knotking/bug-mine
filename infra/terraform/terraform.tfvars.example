@@ -1,0 +1,9 @@
+project_id = "bugmine-dev"
+region     = "us-central1"
+
+# db-custom-1-3840 roughly halves the database bill during early development.
+db_tier = "db-custom-2-8192"
+db_ha   = false
+
+# Required before tenant-supplied crawl sources ship. ~$45/month.
+enable_nat = true
