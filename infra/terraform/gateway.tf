@@ -35,26 +35,49 @@ locals {
     info     = { title = "bugmine", description = "BugMine API", version = "1.0.0" }
     schemes  = ["https"]
     produces = ["application/json"]
+
+    x-google-management = {
+      metrics = [{
+        name        = "bugmine-requests"
+        displayName = "BugMine requests"
+        valueType   = "INT64"
+        metricKind  = "DELTA"
+      }]
+      quota = {
+        limits = [{
+          name   = "bugmine-request-limit"
+          metric = "bugmine-requests"
+          unit   = "1/min/{project}"
+          values = { STANDARD = var.gateway_requests_per_minute }
+        }]
+      }
+    }
     paths = {
       "/**" = {
-        get     = local.gw_op
-        post    = local.gw_op
-        put     = local.gw_op
-        patch   = local.gw_op
-        delete  = local.gw_op
-        options = local.gw_op
+        for method in ["get", "post", "put", "patch", "delete", "options"] :
+        method => merge(local.gw_op, { operationId = "proxy-${method}" })
       }
     }
   })
 
   gw_op = {
     operationId = "proxy"
-    parameters = [{
-      name     = "path"
-      in       = "path"
-      required = true
-      type     = "string"
-    }]
+    # No `parameters` block: `/**` is a wildcard, not a named path parameter, and declaring one
+    # makes the config fail conversion with a message that names neither the path nor the field.
+    # Rate limiting.
+    #
+    # The gateway is the only place this can live: it is the single entry point, and it sees
+    # anonymous traffic that never reaches the application's per-tenant accounting. Without a
+    # quota, /v1/public/* is an unauthenticated endpoint anybody can hammer — and it is the one
+    # surface reachable without an account at all.
+    #
+    # Metric-based rather than per-key, because the public path has no key to attribute to.
+    # Per-tenant quotas remain the application's job, where the tenant is actually known.
+    x-google-quota = {
+      metricCosts = {
+        "bugmine-requests" = 1
+      }
+    }
     x-google-backend = {
       address          = google_cloud_run_v2_service.api.uri
       path_translation = "APPEND_PATH_TO_ADDRESS"
@@ -102,4 +125,17 @@ resource "google_api_gateway_gateway" "bugmine" {
 output "gateway_url" {
   description = "The public entry point. This is what a browser and the CLI should use."
   value       = "https://${google_api_gateway_gateway.bugmine.default_hostname}"
+}
+
+
+variable "gateway_requests_per_minute" {
+  description = <<-EOT
+    Requests per minute through the gateway.
+
+    Deliberately generous rather than tight: `check/dependencies` is called once per lockfile
+    from an IDE, and a developer opening several projects should not be throttled. The number
+    exists to bound abuse of the unauthenticated public surface, not to shape normal use.
+  EOT
+  type        = number
+  default     = 600
 }

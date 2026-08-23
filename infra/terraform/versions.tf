@@ -22,12 +22,19 @@ terraform {
   }
 }
 
+# user_project_override makes the provider send the quota project header. Without it,
+# identitytoolkit refuses Application Default Credentials outright — setting the quota project
+# on ADC is necessary but not sufficient, because Terraform has to actually forward it.
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 provider "google-beta" {
-  project = var.project_id
-  region  = var.region
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
 }

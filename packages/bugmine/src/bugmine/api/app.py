@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from fastapi import Query as Q
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bugmine import sweep as sweep_mod
@@ -282,6 +282,49 @@ def whoami(
         principal_kind=principal.kind.value,
         principal_id=str(principal.team_id or principal.user_id),
     )
+
+
+@console.get("/catalog/search", response_model=list[S.BugOut])
+def console_search(
+    session: Session = Depends(tenant_db),
+    q: str | None = None,
+    bug_type: BugType | None = None,
+    limit: int = Q(default=50, ge=1, le=200),
+) -> list[S.BugOut]:
+    """Search everything this tenant may see — public, subscriber, and its own records.
+
+    Distinct from the public route: that one is hard-wired to public scope for anonymous
+    callers, this one relies on RLS to widen the result to what the principal is entitled to.
+    """
+    stmt = select(BugRecord)
+    if bug_type:
+        stmt = stmt.where(BugRecord.bug_type == bug_type)
+    if q:
+        stmt = stmt.join(Component, Component.id == BugRecord.component_id).where(
+            Component.canonical_ref.ilike(f"%{q}%")
+        )
+    out = [_bug_out(session, r) for r in session.execute(stmt.limit(limit)).scalars()]
+    return [b for b in out if b is not None]
+
+
+@console.get("/catalog/summary")
+def console_summary(session: Session = Depends(tenant_db)) -> dict[str, object]:
+    """What the catalog actually knows.
+
+    Coverage is reported alongside record counts because an empty result and an uncovered
+    component are different answers, and a console that showed only totals would let a thin
+    catalog look like a clean bill of health.
+    """
+    by_type = dict(
+        session.execute(
+            select(BugRecord.bug_type, func.count(BugRecord.id)).group_by(BugRecord.bug_type)
+        ).all()
+    )
+    return {
+        "records": int(session.execute(select(func.count(BugRecord.id))).scalar_one()),
+        "components": int(session.execute(select(func.count(Component.id))).scalar_one()),
+        "by_type": {k.value: int(v) for k, v in by_type.items()},
+    }
 
 
 @console.get("/tenant/members", response_model=list[S.MemberOut])
