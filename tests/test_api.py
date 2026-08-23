@@ -12,15 +12,13 @@ import uuid
 
 import pytest
 from bugmine.api import create_app
-from sqlalchemy import select
-
 from bugmine.catalog import IncomingBug, write
 from bugmine.db import tenant_session
 from bugmine.models import (
-    LifecycleState,
-    BugRecord,
     ApiKey,
+    BugRecord,
     BugType,
+    LifecycleState,
     PrincipalKind,
     PrivacyScope,
     RecordOrigin,
@@ -28,7 +26,7 @@ from bugmine.models import (
     Team,
 )
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 
 
 @pytest.fixture

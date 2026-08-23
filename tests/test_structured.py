@@ -182,7 +182,10 @@ class TestDirection:
             _feed({
                 "tag_name": "v2.14.0a1",
                 "name": "v2.14.0a1",
-                "body": "#### Changes\n* Remove support for `eval_type_backport()` by @v in [#1](x)",
+                "body": (
+                    "#### Changes\n"
+                    "* Remove support for `eval_type_backport()` by @v in [#1](x)"
+                ),
             }),
             component_ref="pydantic",
         )
