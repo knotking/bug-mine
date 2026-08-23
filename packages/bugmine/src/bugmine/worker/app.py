@@ -28,6 +28,7 @@ from bugmine.models import JobState, JobType, PrivacyScope, RecordOrigin, Subjec
 from bugmine.models.jobs import Job
 from bugmine.worker import crawl as crawl_mod
 from bugmine.worker import extract as extract_mod
+from bugmine.worker import structured
 
 logger = logging.getLogger("bugmine.worker")
 
@@ -46,6 +47,9 @@ class ExtractRequest(BaseModel):
     subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
     component_ref: str | None = None
     ecosystem: str | None = None
+    mode: str = "auto"
+    """`auto` uses the deterministic parser for feeds whose structure is known and the model
+    for everything else. `structured` or `llm` force one."""
 
 
 def _record_job(app: Any, job_type: JobType, payload: dict[str, Any]) -> uuid.UUID:
@@ -114,19 +118,39 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
     job_id = _record_job(app, JobType.EXTRACT, body.model_dump(mode="json"))
     try:
         document = extract_mod.read_artifact(body.artifact_uri, client=app.state.storage)
-        result = extract_mod.extract(
-            document,
-            genai_client=app.state.genai,
-            model=app.state.model,
-            subject_domain=body.subject_domain,
-            ecosystem=body.ecosystem,
-            artifact_uri=body.artifact_uri,
-            default_component=body.component_ref,
+
+        # A GitHub releases feed states its versions rather than implying them, so a parser is
+        # both cheaper and more accurate than a model. The model is for prose changelogs where
+        # the defect has to be read out of a sentence.
+        use_structured = body.mode == "structured" or (
+            body.mode == "auto" and structured.looks_like_github_releases(document)
         )
+
+        if use_structured:
+            parsed = structured.extract_github_releases(
+                document,
+                component_ref=body.component_ref or "unknown",
+                subject_domain=body.subject_domain,
+                ecosystem=body.ecosystem,
+                artifact_uri=body.artifact_uri,
+            )
+            bugs, rejected, engine = parsed.bugs, 0, "structured"
+        else:
+            result = extract_mod.extract(
+                document,
+                genai_client=app.state.genai,
+                model=app.state.model,
+                subject_domain=body.subject_domain,
+                ecosystem=body.ecosystem,
+                artifact_uri=body.artifact_uri,
+                default_component=body.component_ref,
+            )
+            bugs, rejected, engine = result.bugs, result.rejected, "llm"
+
         written = 0
         deduped = 0
         with tenant_session(app.state.engine, None) as s:
-            for bug in result.bugs:
+            for bug in bugs:
                 # Scope is decided here, by the job's origin — never by the extractor. Letting
                 # model output choose visibility would put a privacy decision in the code path
                 # most exposed to injected content.
@@ -147,10 +171,11 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
     _finish_job(app, job_id, JobState.SUCCEEDED)
     return {
         "job_id": str(job_id),
-        "extracted": len(result.bugs),
+        "engine": engine,
+        "extracted": len(bugs),
         "written": written,
         "deduplicated": deduped,
-        "rejected_by_validation": result.rejected,
+        "rejected_by_validation": rejected,
     }
 
 
