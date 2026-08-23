@@ -196,24 +196,27 @@ def record_list(args: argparse.Namespace) -> int:
     Deliberately unfiltered by lifecycle state: this is the view an operator needs when
     deciding what to retract, and it is the one place a retracted record should still show.
     """
+    from bugmine.catalog.reader import current_version
     from bugmine.models import BugRecord, Component
 
     with tenant_session(_engine(), None, commit=False) as s:
-        stmt = select(BugRecord).order_by(BugRecord.observed_at.desc()).limit(args.limit)
+        stmt = select(BugRecord).order_by(BugRecord.first_seen_at.desc()).limit(args.limit)
         rows = s.execute(stmt).scalars().all()
         if not rows:
             print("No records.")
         for r in rows:
             component = s.get(Component, r.component_id)
             ref = component.canonical_ref if component else "?"
+            version = current_version(s, r)
+            title = version.title if version else "(no version)"
             applicability = r.applicability or {}
-            direction = (
-                f"introduced_in={applicability.get('introduced_in')}"
-                if applicability.get("introduced_in")
-                else f"fixed_in={applicability.get('fixed_in')}"
+            bounds = (
+                f"introduced_in={applicability.get('introduced_in')} "
+                f"fixed_in={applicability.get('fixed_in')}"
             )
             print(f"  {r.id}  {r.lifecycle_state.value:<10} {r.bug_type.value:<16} {ref}")
-            print(f"      {direction}  {r.title[:90]}")
+            print(f"      {bounds}")
+            print(f"      {title[:100]}")
     return 0
 
 
@@ -224,6 +227,7 @@ def record_retract(args: argparse.Namespace) -> int:
     an absence is deliberate rather than a gap in crawling. Retracted records stop grounding
     findings and stop appearing in search, which is the whole effect wanted here.
     """
+    from bugmine.catalog.reader import current_version
     from bugmine.models import BugRecord, Component, LifecycleState
 
     with tenant_session(_engine(), None) as s:
@@ -247,11 +251,13 @@ def record_retract(args: argparse.Namespace) -> int:
             print("Nothing matched.")
             return 1
         for r in rows:
+            version = current_version(s, r)
+            title = version.title if version else str(r.id)
             if r.lifecycle_state is LifecycleState.RETRACTED:
-                print(f"  already retracted  {r.id}  {r.title[:70]}")
+                print(f"  already retracted  {title[:70]}")
                 continue
             r.lifecycle_state = LifecycleState.RETRACTED
-            print(f"  retracted  {r.id}  {r.title[:70]}")
+            print(f"  retracted  {title[:70]}")
     return 0
 
 
