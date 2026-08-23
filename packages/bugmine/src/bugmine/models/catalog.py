@@ -223,12 +223,40 @@ class Source(Base):
         ),
     )
 
+    RETRY_BACKOFF_MINUTES = 10
+    """First retry delay after a failed attempt, doubled per consecutive failure and capped at
+    the source's own interval."""
+
     def is_due(self, now: datetime) -> bool:
+        """Whether this source should be enqueued.
+
+        A *failed* attempt must not satisfy the interval. The sweep marks a source attempted
+        when it enqueues, not when the fetch succeeds — so 115 sources rate-limited in one burst
+        were all stamped as attempted and went silent for a full day, having fetched nothing.
+        The catalog stopped growing and every source looked healthy.
+
+        So a source that has never succeeded, or whose last attempt failed, comes back on a
+        backoff instead: soon enough to recover from a transient limit, with doubling so a
+        genuinely broken source does not get retried forever at full rate.
+        """
         if not self.enabled:
             return False
         if self.last_attempt_at is None:
             return True
-        return (now - self.last_attempt_at).total_seconds() >= self.interval_minutes * 60
+
+        interval = self.interval_minutes * 60
+        since_attempt = (now - self.last_attempt_at).total_seconds()
+        if since_attempt >= interval:
+            return True
+
+        failing = self.consecutive_failures > 0 or self.last_success_at is None
+        if not failing:
+            return False
+        # First failure waits the base delay, not double it: the common case is a transient
+        # rate limit, and doubling before the first retry delays recovery for no reason.
+        doublings = min(max(self.consecutive_failures - 1, 0), 6)
+        backoff = min(self.RETRY_BACKOFF_MINUTES * 60 * (2**doublings), interval)
+        return since_attempt >= backoff
 
     def is_stale(self, now: datetime, *, factor: int = 3) -> bool:
         """No successful run in `factor` intervals.

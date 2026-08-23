@@ -38,12 +38,47 @@ class TestDueness:
         assert src.last_attempt_at == NOW
 
     def test_a_recently_run_source_is_not_due(self, engine: Engine) -> None:
+        url = _url()
         with tenant_session(engine, None) as s:
-            src = add_source(s, url=_url(), subject_domain=SubjectDomain.REPO_LIBRARY)
+            src = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
             src.last_attempt_at = NOW - timedelta(minutes=10)
+            # Succeeded, not merely attempted. The two were indistinguishable in this fixture,
+            # and the difference is what decides whether a retry is owed.
+            src.last_success_at = NOW - timedelta(minutes=10)
             calls: list[dict] = []
             r = sweep(s, calls.append, now=NOW)
-        assert r.enqueued == 0, "a source inside its interval was re-enqueued"
+        assert url not in [c["url"] for c in calls], "a healthy source inside its interval ran"
+
+    def test_a_source_whose_attempt_failed_retries_before_its_interval(
+        self, engine: Engine
+    ) -> None:
+        """The sweep marks a source attempted when it enqueues, not when the fetch succeeds.
+
+        115 sources rate-limited in one burst were all stamped attempted and went silent for a
+        full day having fetched nothing — the catalog stopped growing and every source still
+        looked healthy. A failed attempt must not satisfy the interval.
+        """
+        url = _url()
+        with tenant_session(engine, None) as s:
+            src = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+            src.last_attempt_at = NOW - timedelta(minutes=15)
+            src.last_success_at = None
+            src.consecutive_failures = 1
+            calls: list[dict] = []
+            sweep(s, calls.append, now=NOW)
+        assert url in [c["url"] for c in calls], "a failed source was not retried"
+
+    def test_a_repeatedly_failing_source_backs_off(self, engine: Engine) -> None:
+        """Doubling, so a genuinely broken source is not retried forever at full rate."""
+        url = _url()
+        with tenant_session(engine, None) as s:
+            src = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+            src.last_attempt_at = NOW - timedelta(minutes=15)
+            src.last_success_at = None
+            src.consecutive_failures = 5
+            calls: list[dict] = []
+            sweep(s, calls.append, now=NOW)
+        assert url not in [c["url"] for c in calls], "a long-failing source retried too soon"
 
     def test_sweeping_twice_enqueues_once(self, engine: Engine) -> None:
         """A double-firing scheduler, or a manual run alongside cron, must not double-crawl."""
