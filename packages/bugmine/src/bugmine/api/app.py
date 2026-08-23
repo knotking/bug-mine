@@ -316,9 +316,12 @@ def add_system_source(body: S.SourceIn, request: Request) -> S.SourceOut:
             subject_domain=src.subject_domain,
             component_ref=src.component_ref,
             ecosystem=src.ecosystem,
+            scope=src.privacy_scope,
+            interval_minutes=src.interval_minutes,
             enabled=src.enabled,
-            last_attempt_at=src.last_attempt_at,
-            last_success_at=src.last_success_at,
+            last_success_at=None,
+            consecutive_failures=0,
+            stale=False,
         )
 
 

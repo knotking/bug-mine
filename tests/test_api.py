@@ -25,6 +25,7 @@ from bugmine.models import (
     PrivacyScope,
     RecordOrigin,
     Scan,
+    Source,
     SubjectDomain,
     Team,
 )
@@ -617,3 +618,43 @@ class TestScanSubmission:
         headers = {"X-BugMine-Key": _issue_key(engine, a)}
         assert client.get(f"/v1/scans/{other_scan}/findings", headers=headers).json() == []
         assert all(s["id"] != other_scan for s in client.get("/v1/scans", headers=headers).json())
+
+
+class TestOperatorSources:
+    """The shared catalog is system-owned; a tenant's sources are private to them.
+
+    Registering a shared source through the tenant route stores it under that tenant, where a
+    system sweep — which runs with no tenant context — cannot see it. 115 sources were accepted
+    that way and could never have been crawled, with the sweep reporting `considered: 0`.
+    """
+
+    def test_an_operator_source_is_visible_to_a_system_session(
+        self, client: TestClient, engine: Engine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BUGMINE_OPERATOR_TOKEN", "op-secret")
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        r = client.post(
+            "/v1/admin/ingest/sources",
+            headers={"X-BugMine-Operator": "op-secret"},
+            json={"url": url, "component_ref": "x", "ecosystem": "pypi"},
+        )
+        assert r.status_code == 201, r.text
+        # The sweep's own view: no tenant context at all.
+        with tenant_session(engine, None, commit=False) as s:
+            urls = [row.url for row in s.execute(select(Source)).scalars()]
+        assert url in urls, "a system source must be visible without a tenant context"
+
+    def test_a_tenant_source_is_invisible_to_a_system_session(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """The behaviour that made the mistake silent, pinned so it stays understood."""
+        tenant, _ = two_tenants
+        url = f"https://example.test/{uuid.uuid4().hex[:8]}"
+        client.post(
+            "/v1/sources",
+            headers={"X-BugMine-Key": _issue_key(engine, tenant)},
+            json={"url": url, "component_ref": "x", "ecosystem": "pypi"},
+        )
+        with tenant_session(engine, None, commit=False) as s:
+            urls = [row.url for row in s.execute(select(Source)).scalars()]
+        assert url not in urls
