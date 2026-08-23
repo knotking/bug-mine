@@ -116,3 +116,84 @@ class TestLargeFeeds:
         """If something does truncate upstream, detection must decline rather than misparse."""
         feed = _feed({"body": "Breaking changes"})
         assert not looks_like_github_releases(feed[: len(feed) // 2])
+
+
+class TestDirection:
+    """Which way round a record points.
+
+    A release note mentions a defect for one of two opposite reasons: the release introduces it,
+    or the release fixes it. Recording a fix as an introduction inverts the record — every
+    version that is actually safe gets flagged and every broken one gets cleared, which is
+    strictly worse than having no record at all. Each test here is a shape that was, or would
+    have been, stored backwards.
+    """
+
+    def test_security_fix_is_recorded_as_fixed_not_introduced(self) -> None:
+        r = extract_github_releases(
+            _feed({"tag_name": "1.2.3", "body": "### Security\n* Fix CVE-2026-1234 in headers"}),
+            component_ref="lib",
+        )
+        assert len(r.bugs) == 1
+        applicability = r.bugs[0].applicability
+        assert applicability["fixed_in"] == "1.2.3"
+        assert applicability["introduced_in"] is None
+
+    def test_dropped_support_is_recorded_as_introduced(self) -> None:
+        r = extract_github_releases(
+            _feed({"tag_name": "v2.14.0", "body": "#### Changes\n* Drop support for Python 3.9"}),
+            component_ref="pydantic",
+        )
+        assert len(r.bugs) == 1
+        applicability = r.bugs[0].applicability
+        assert applicability["introduced_in"] == "2.14.0"
+        assert applicability["fixed_in"] is None
+
+    def test_non_breaking_changes_is_not_a_breaking_change(self) -> None:
+        """Release notes routinely say "considered non-breaking changes". Matching that phrase
+        files a breaking-change record against a release whose text says the opposite."""
+        r = extract_github_releases(
+            _feed({"body": "These are considered non-breaking changes per our version policy."}),
+            component_ref="pydantic",
+        )
+        assert r.bugs == []
+
+    def test_ambiguous_marker_without_a_heading_is_dropped(self) -> None:
+        """"regression" reads identically in "fixes a regression" and "introduces a regression".
+        With no heading to resolve it, the match is dropped rather than guessed."""
+        r = extract_github_releases(
+            _feed({"body": "### Internal\n* Accept any base test failure as regression"}),
+            component_ref="fastapi",
+        )
+        assert r.bugs == []
+        assert r.unresolved == 1
+
+    def test_regression_under_a_fixes_heading_is_a_fix(self) -> None:
+        r = extract_github_releases(
+            _feed({"tag_name": "0.9.1", "body": "### Bug Fixes\n* Fix a regression in parsing"}),
+            component_ref="lib",
+        )
+        assert len(r.bugs) == 1
+        assert r.bugs[0].bug_type is BugType.FUNCTIONAL
+        assert r.bugs[0].applicability["fixed_in"] == "0.9.1"
+
+    def test_title_is_the_defect_not_the_release_name(self) -> None:
+        """A title of "v2.14.0a1" tells a reader nothing about what broke."""
+        r = extract_github_releases(
+            _feed({
+                "tag_name": "v2.14.0a1",
+                "name": "v2.14.0a1",
+                "body": "#### Changes\n* Remove support for `eval_type_backport()` by @v in [#1](x)",
+            }),
+            component_ref="pydantic",
+        )
+        assert r.bugs[0].title == "Remove support for eval_type_backport()"
+
+    def test_one_record_per_defect_not_per_release(self) -> None:
+        r = extract_github_releases(
+            _feed({
+                "tag_name": "v3.0.0",
+                "body": "## Breaking Changes\n- removed the old API\n- dropped support for py38",
+            }),
+            component_ref="lib",
+        )
+        assert len(r.bugs) == 2
