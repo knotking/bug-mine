@@ -260,6 +260,21 @@ Every path resolves to a `tenant_id` server-side. **No request may name its own 
 | Build | **Cloud Build + Artifact Registry** | |
 | Infra | **Terraform** | |
 
+### Project
+
+All resources live in a dedicated GCP project, **`bugmine-dev`** — separate from any existing
+project, so IAM, billing, quotas and audit logs are scoped to BugMine alone and a later
+`bugmine-prod` is a Terraform variable rather than a migration.
+
+Two things to settle before creation, because both are painful to change afterwards:
+
+| | Why it matters |
+| --- | --- |
+| **Owning account / organisation** | Determines who can grant access to teammates later. A project under a personal account cannot be handed to an org without recreating it |
+| **Billing account** | Ties to the ~$280/month in §7 |
+
+The project needs an `environment` tag at creation — the org policy in use already enforces this.
+
 ### Egress topology — the security-relevant part
 
 | Component | Egress | Model access | Rationale |
