@@ -153,6 +153,46 @@ against your specific stack**, plus the records only BugMine can produce.
 
 ---
 
+## 8. Onboarding — invite only
+
+Added 2026-08-22. Scoped to the MVP; self-serve is a later decision, not a rejected one.
+
+| ID | Requirement |
+| --- | --- |
+| **FR-76** | Tenants are provisioned by a BugMine admin. There is **no self-serve tenant creation**. |
+| **FR-77** | Users join a tenant **by invitation only**, issued by a tenant admin or a BugMine admin. |
+| **FR-78** | An invite is single-use, expiring, and bound to a specific email address. |
+| **FR-79** | There is no domain-based auto-join. Sharing an email domain with an existing tenant grants nothing. |
+
+### What this removes
+
+Invite-only is a large simplification, and most of what it buys is the absence of work:
+
+- No public registration endpoint, so no registration abuse surface
+- No email-verification flow for unknown parties
+- No trial provisioning, quota defaults for strangers, or spam-account handling
+- Tenant provisioning becomes an operator action, which fits admin-as-config-and-CLI rather than
+  an admin console
+
+FR-79 is stated explicitly because domain-based auto-join is the feature that gets added later
+"for convenience" and quietly becomes a security incident — anyone who can obtain an address at a
+customer's domain, including a former employee whose account was never deprovisioned, joins their
+tenant unprompted.
+
+### The consequence to confront
+
+FR-73 makes public search unauthenticated and indexable, explicitly as an acquisition channel.
+FR-76 means **there is no path from that channel to an account.** A developer arriving from a
+search engine, finding exactly the bug that was breaking their build, has nowhere to convert.
+
+For a design-partner MVP that is the right trade — onboarding is sales-led and each tenant is
+provisioned deliberately. But it means the acquisition surface is being built before the funnel it
+feeds exists, and the two should not be confused when judging whether public search is working.
+A "request access" capture on the public pages is the cheap middle ground and is not currently
+planned.
+
+---
+
 ## Non-goals
 
 - ~~**Evals on LLMs and repos to identify bugs**~~ — **no longer a non-goal as of 2026-08-22.**

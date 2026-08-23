@@ -68,8 +68,8 @@ returns *more* data, not an error. RLS makes the database refuse.
 | Role | Can | Cannot |
 | --- | --- | --- |
 | **Tenant member** | Scan own repos, read `global ∪ own`, manage own crawl sources | See another tenant; write global records |
-| **Tenant admin** | The above, plus manage members, API keys, quotas | Write global records |
-| **BugMine admin** | Manage global sources, curate global records, scan anything for validation | *Read tenant-private records without an audited break-glass path* |
+| **Tenant admin** | The above, plus **issue invites**, manage members, API keys, quotas | Write global records; create tenants |
+| **BugMine admin** | **Provision tenants**, manage global sources, curate global records, scan anything for validation | *Read tenant-private records without an audited break-glass path* |
 
 The last row matters and is easy to get wrong. Operators being able to read customer data casually
 is the thing a security review will find. Admin access to tenant-private records must be an
@@ -230,7 +230,8 @@ will be thin early, and silence would read as a clean bill of health.
 
 | Consumer | Mechanism |
 | --- | --- |
-| Public search visitor | **None** — `public` scope only, rate-limited |
+| Public search visitor | **None** — `public` scope only, rate-limited. No signup path (FR-76) |
+| Invited user | Invite token + Google OIDC, email must match the invite |
 | Web / IDE user | Google OIDC → short-lived session |
 | CLI / MCP local | Device-code flow → refresh token in the OS keychain |
 | CI / bots | Tenant-scoped API key, prefix-identifiable, revocable |
