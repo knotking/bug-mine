@@ -215,11 +215,17 @@ h2{font-size:19px;letter-spacing:-.015em;font-weight:650;margin-bottom:3px}
 }
 /* ---------- landing: one scrolling page, anchored nav ---------- */
 .land{min-height:100vh;position:relative}
-.topbar{display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:40;
-  padding:14px clamp(130px,4vw + 112px,150px) 14px clamp(18px,4vw,44px);
+.topbar{position:sticky;top:0;z-index:40;padding:14px clamp(18px,4vw,44px);
   background:color-mix(in srgb,var(--panel) 88%,transparent);
   backdrop-filter:saturate(1.5) blur(10px);border-bottom:1px solid var(--line)}
-@media(max-width:640px){.topbar{padding-right:112px}}
+/* The bar's contents sit on the same 1040px column as every section, so the logo lines up with
+   the hero beneath it. A full-width bar over centred content reads as crooked even though
+   both are technically correct. */
+.topbar-inner{max-width:1040px;margin:0 auto;display:flex;align-items:center;gap:14px}
+/* Only reserve room for the fixed theme toggle when the column actually reaches the corner it
+   occupies. Above that width the column ends well before it and no reservation is needed. */
+@media(max-width:1200px){.topbar-inner{padding-right:118px}}
+@media(max-width:640px){.topbar-inner{padding-right:106px}}
 .topbar .spacer{margin-left:auto}
 .navtabs{display:flex;gap:1px;margin-left:22px}
 .navtabs a{padding:7px 12px;border-radius:8px;color:var(--dim);font-size:13.5px;
@@ -324,6 +330,27 @@ pre.code{background:var(--bg);border:1px solid var(--line);border-radius:11px;pa
 pre.code .m{color:var(--accent-dim);font-weight:700}
 pre.code .cm{color:var(--faint)}
 
+.cmp{width:100%;border-collapse:separate;border-spacing:0;margin-top:26px;font-size:13.6px;
+  text-align:left}
+.cmp th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);
+  font-weight:700;padding:0 14px 10px}
+.cmp th.us{color:var(--accent)}
+.cmp td{padding:13px 14px;border-top:1px solid var(--line);vertical-align:top;color:var(--dim)}
+.cmp td:first-child{color:var(--fg);font-weight:600;width:26%}
+.cmp td.us{color:var(--fg);background:var(--accent-soft)}
+.cmp tr:first-child td{border-top:0}
+.cmp tbody tr td.us:first-of-type{border-radius:0}
+.stat-line{display:flex;gap:clamp(20px,4vw,44px);flex-wrap:wrap;justify-content:center;
+  margin-top:26px}
+.stat-line .s{max-width:20ch}
+.stat-line .n{font-size:clamp(22px,2.6vw,29px);font-weight:700;letter-spacing:-.022em;
+  color:var(--accent)}
+.stat-line .d{font-size:12.8px;color:var(--dim);line-height:1.5;margin-top:5px}
+.ide{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;
+  margin-top:26px;text-align:left}
+.idecard{padding:19px;border:1px solid var(--line);border-radius:13px;background:var(--bg)}
+.idecard b{display:block;margin-bottom:6px;font-size:14.5px}
+.idecard p{color:var(--dim);font-size:13.2px;line-height:1.55;margin:0 0 10px}
 footer.site{border-top:1px solid var(--line);padding:44px clamp(18px,4vw,44px) 34px;
   background:var(--panel)}
 .foot{max-width:1040px;margin:0 auto;display:grid;
@@ -419,7 +446,7 @@ async function api(path,opts={}){
 /* ---------------- sign in ---------------- */
 
 
-const LAND = {search:'Search', how:'How it works', coverage:'Coverage', api:'API'};
+const LAND = {why:'Why', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
 let hits=[], filter='all', lastQ='';
 
 const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -427,14 +454,14 @@ const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentCol
 
 function signin(msg){
   app.innerHTML=`<div class="land">
-    <div class="topbar">
+    <div class="topbar"><div class="topbar-inner">
       <div class="mark">${LOGO}<h1>BugMine</h1></div>
       <nav class="navtabs">
         ${Object.entries(LAND).map(([k,l])=>`<a href="#${k}">${l}</a>`).join('')}
       </nav>
       <span class="spacer"></span>
       <button class="btn" id="open-signin" style="width:auto;padding:9px 18px">Sign in</button>
-    </div>
+    </div></div>
 
     <section class="hero-sec" id="top">
       <div class="wrap">
@@ -457,7 +484,60 @@ function signin(msg){
       </div>
     </section>
 
-    <section class="alt" id="search">
+
+    <section class="alt" id="why">
+      <div class="wrap center">
+        <div class="kicker">Why this exists</div>
+        <h2 class="sec">Scanners are 92% wrong, and silent about the rest</h2>
+        <p class="secsub">Dependency scanners report every package containing a known defect.
+          Most of those defects are unreachable from the code that imported them — so the
+          report is mostly noise, and the noise trains people to ignore it.</p>
+
+        <div class="stat-line">
+          <div class="s"><div class="n">92%</div>
+            <div class="d">scanner false-positive rate measured across 2,414 repositories</div></div>
+          <div class="s"><div class="n">61.9%</div>
+            <div class="d">of those false alarms removed by reachability analysis alone</div></div>
+          <div class="s"><div class="n">70%</div>
+            <div class="d">of vulnerable dependencies need a minor or major upgrade to fix — which
+              may break you in a different way</div></div>
+          <div class="s"><div class="n">67%</div>
+            <div class="d">of Maven packages have violated semver, so a version number is not a
+              promise</div></div>
+        </div>
+
+        <table class="cmp">
+          <thead><tr><th></th><th>Dependency scanners</th><th class="us">BugMine</th></tr></thead>
+          <tbody>
+            <tr><td>What it catalogs</td>
+              <td>CVEs — security only</td>
+              <td class="us">Breaking changes, deprecations, regressions, performance <em>and</em>
+                security. Most of what we hold has no CVE.</td></tr>
+            <tr><td>What it reports</td>
+              <td>Every dependency containing a known defect</td>
+              <td class="us">Only defects your code reaches. Unreachable ones are suppressed,
+                and the count of what was suppressed is shown.</td></tr>
+            <tr><td>Uncertainty</td>
+              <td>Absent from the report</td>
+              <td class="us">Undetermined is reported with lower confidence, never hidden — and
+                components with no coverage are named as not covered.</td></tr>
+            <tr><td>Evidence</td>
+              <td>An advisory ID</td>
+              <td class="us">Every finding cites the record and revision that grounds it.</td></tr>
+            <tr><td>Upgrade advice</td>
+              <td>"Upgrade to latest"</td>
+              <td class="us">The catalog knows what the newer version breaks, because that is the
+                same kind of record.</td></tr>
+          </tbody>
+        </table>
+        <p class="secsub" style="margin-top:20px;font-size:13.4px">Figures from published
+          research, cited in our design notes. Our own precision is a measured, reported metric
+          rather than a claim — the category is defined by a 92% error rate, so asserting
+          accuracy would be worth nothing.</p>
+      </div>
+    </section>
+
+    <section id="search">
       <div class="wrap center">
         <div class="kicker">Live catalog</div>
         <h2 class="sec">Search it before you sign up</h2>
@@ -511,6 +591,39 @@ function signin(msg){
       </div>
     </section>
 
+
+    <section class="alt" id="editor">
+      <div class="wrap center">
+        <div class="kicker">In your editor</div>
+        <h2 class="sec">Ask before you add the dependency</h2>
+        <p class="secsub">The useful moment is when you are choosing a version, not three weeks
+          later in a report nobody opens. BugMine speaks MCP, so an agent can ask on your behalf
+          while you work.</p>
+        <div class="ide">
+          <div class="idecard"><b>Cursor · Claude Code</b>
+            <p>An MCP server exposing four tools: <code>check_dependency</code>,
+              <code>search_bugs</code>, <code>scan_repo</code>, <code>get_scan</code>. Ask
+              "what breaks if I take pydantic 2.14?" and the answer cites records.</p>
+            <pre class="code">{"mcpServers": {"bugmine": {
+  "command": "bugmine-mcp",
+  "env": {"BUGMINE_KEY": "bmk_…"}}}}</pre></div>
+          <div class="idecard"><b>Command line</b>
+            <p>Resolves your lockfile locally and sends names and versions only. Source never
+              leaves the machine — that is the design, not a setting.</p>
+            <pre class="code">$ bugmine check
+3 findings · 41 suppressed as unreachable
+2 components not covered</pre></div>
+          <div class="idecard"><b>CI · GitHub</b>
+            <p>Scan a branch server-side with reachability, and read findings back with their
+              citations. Nothing is reported that your code does not touch.</p>
+            <pre class="code">POST /v1/scans {"repo_url": "…"}
+GET  /v1/scans/{id}/findings</pre></div>
+        </div>
+        <p class="secsub" style="margin-top:20px;font-size:13.4px">The MCP server and CLI are
+          built; the GitHub app is not yet. We would rather say which is which.</p>
+      </div>
+    </section>
+
     <section id="api">
       <div class="wrap">
         <div class="center">
@@ -535,9 +648,10 @@ function signin(msg){
             and security — narrowed to what your code reaches.</p>
         </div>
         <div><h4>Product</h4>
-          <a href="#search">Search</a><a href="#coverage">Coverage</a><a href="#api">API</a></div>
+          <a href="#search">Search</a><a href="#coverage">Coverage</a>
+          <a href="#editor">In your editor</a><a href="#api">API</a></div>
         <div><h4>How</h4>
-          <a href="#how">Pipeline</a><span class="li">Reachability</span>
+          <a href="#why">Why it exists</a><a href="#how">Pipeline</a><span class="li">Reachability</span>
           <span class="li">Citations</span></div>
         <div><h4>Account</h4>
           <a href="#" id="foot-signin">Sign in</a>

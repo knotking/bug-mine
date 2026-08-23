@@ -74,8 +74,8 @@ def test_every_top_right_bar_reserves_room_for_the_theme_toggle() -> None:
     assert toggle, "theme toggle position not found"
     needed = int(toggle.group(1)) + 100  # three 28px buttons plus gaps and padding
 
-    for selector in ("header", ".topbar"):
-        rule = re.search(re.escape(selector) + r"\{[^}]*padding:([^;}]+)", source)
+    for selector in ("header", ".topbar-inner"):
+        rule = re.search(re.escape(selector) + r"\{[^}]*padding(?:-right)?:([^;}]+)", source)
         assert rule, f"{selector} has no padding rule"
         # Right padding is the second value in "a b", the second of "a b c d", or the only one.
         parts = rule.group(1).split()
