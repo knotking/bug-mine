@@ -163,6 +163,8 @@ Added 2026-08-22. Scoped to the MVP; self-serve is a later decision, not a rejec
 | **FR-77** | Users join a tenant **by invitation only**, issued by a tenant admin or a BugMine admin. |
 | **FR-78** | An invite is single-use, expiring, and bound to a specific email address. |
 | **FR-79** | There is no domain-based auto-join. Sharing an email domain with an existing tenant grants nothing. |
+| **FR-80** | Every API key is bound to exactly one **principal** — a single user or a single team. There are no tenant-wide keys. |
+| **FR-81** | Every authenticated request resolves to a principal, and all usage is attributed to it. |
 
 ### What this removes
 
@@ -178,6 +180,18 @@ FR-79 is stated explicitly because domain-based auto-join is the feature that ge
 "for convenience" and quietly becomes a security incident — anyone who can obtain an address at a
 customer's domain, including a former employee whose account was never deprovisioned, joins their
 tenant unprompted.
+
+### Why keys are per-principal
+
+FR-80 is not least-privilege hygiene — it is what makes the accounting work.
+
+FR-17 bills per team and per user, FR-19 reports scan runs per team and per user, and the token
+ledger carries `team_id` and `user_id` columns. **A tenant-wide key cannot populate any of them.**
+Every request arriving on a shared key would land in the same undifferentiated bucket, and the
+per-team and per-user reporting would be structurally unbuildable rather than merely unbuilt.
+
+It also makes revocation survivable. Rotating one CI pipeline's key should not break every other
+integration in the tenant, and with a shared key it does.
 
 ### The consequence to confront
 
