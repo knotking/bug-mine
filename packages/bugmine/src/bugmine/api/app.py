@@ -30,6 +30,7 @@ from bugmine.api.deps import Principal, anonymous_session, require_principal, te
 from bugmine.catalog import Query, retrieve
 from bugmine.catalog.reader import current_version
 from bugmine.db import make_engine, tenant_session
+from bugmine.firebase import TokenVerifier
 from bugmine.models import (
     ApiKey,
     BugRecord,
@@ -374,6 +375,12 @@ def create_source(
 def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     app = FastAPI(title="BugMine API", version="1.0.0")
     app.state.engine = engine or make_engine()
+
+    # Only configured when a project id is present, so local development and tests run without
+    # Firebase at all — API keys keep working, which is the same asymmetry the design relies on
+    # if Firebase is ever down.
+    project = os.environ.get("BUGMINE_FIREBASE_PROJECT")
+    app.state.firebase = TokenVerifier(project) if project else None
     app.include_router(public)
     app.include_router(catalog)
     app.include_router(check)

@@ -173,6 +173,33 @@ def accept_invite(session: Session, *, token: str, email: str) -> Membership:
     return membership
 
 
+def accept_invite_with_key(
+    session: Session, *, token: str, email: str, firebase_uid: str | None = None
+) -> tuple[Membership, MintedKey]:
+    """Redeem an invite and issue the user's own API key in one step.
+
+    FR-84. Doing this at account creation rather than on request means somebody who has just
+    signed up can use the CLI and the MCP server immediately, instead of needing a second,
+    operator-mediated step to become useful.
+
+    The key is bound to the *user*, not the team, so revoking their access revokes it — a
+    team-bound key would outlive the person it was issued for.
+    """
+    membership = accept_invite(session, token=token, email=email)
+
+    user = session.get(User, membership.user_id)
+    if user is not None and firebase_uid and not user.external_subject:
+        user.external_subject = firebase_uid
+
+    key = mint_api_key(
+        session,
+        tenant_id=membership.tenant_id,
+        name="personal",
+        user_id=membership.user_id,
+    )
+    return membership, key
+
+
 def provision_tenant(
     session: Session, *, name: str, slug: str, admin_email: str
 ) -> tuple[Tenant, Team, MintedInvite]:
