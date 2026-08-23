@@ -319,14 +319,27 @@ def console_summary(session: Session = Depends(tenant_db)) -> dict[str, object]:
     component are different answers, and a console that showed only totals would let a thin
     catalog look like a clean bill of health.
     """
+    # Counted over visible records only, and for the same reason search is: a retracted record
+    # is one we have disowned. Counting it here while search omits it would have the console
+    # contradict itself on one screen, and would inflate coverage with records nobody may see.
+    visible = BugRecord.lifecycle_state.in_(VISIBLE_LIFECYCLE_STATES)
     by_type = dict(
         session.execute(
-            select(BugRecord.bug_type, func.count(BugRecord.id)).group_by(BugRecord.bug_type)
+            select(BugRecord.bug_type, func.count(BugRecord.id))
+            .where(visible)
+            .group_by(BugRecord.bug_type)
         ).all()
     )
+    # Components are counted through their records, not from the registry: a component whose
+    # every record has been retracted is not covered, and the registry keeps the row.
+    components = session.execute(
+        select(func.count(func.distinct(BugRecord.component_id))).where(visible)
+    ).scalar_one()
     return {
-        "records": int(session.execute(select(func.count(BugRecord.id))).scalar_one()),
-        "components": int(session.execute(select(func.count(Component.id))).scalar_one()),
+        "records": int(
+            session.execute(select(func.count(BugRecord.id)).where(visible)).scalar_one()
+        ),
+        "components": int(components),
         "by_type": {k.value: int(v) for k, v in by_type.items()},
     }
 

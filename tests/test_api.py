@@ -380,3 +380,26 @@ class TestRetractedRecordsAreNotSearchable:
         assert client.get("/v1/catalog/search?q=langgraph", headers=headers).json() != []
         self._retract_all(engine)
         assert client.get("/v1/catalog/search?q=langgraph", headers=headers).json() == []
+
+    def test_summary_does_not_count_retracted(
+        self,
+        client: TestClient,
+        engine: Engine,
+        two_tenants: tuple[uuid.UUID, uuid.UUID],
+    ) -> None:
+        """The console shows the summary and the search results on one screen. If the counts
+        include records search omits, the page contradicts itself and overstates coverage."""
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        _seed_public_bug(engine, "llamaindex")
+        headers = {"X-BugMine-Key": key}
+        before = client.get("/v1/catalog/summary", headers=headers).json()
+        assert before["records"] == 1
+        assert before["components"] == 1
+
+        self._retract_all(engine)
+        after = client.get("/v1/catalog/summary", headers=headers).json()
+        assert after["records"] == 0
+        assert after["by_type"] == {}
+        # The component row survives retraction; coverage must not.
+        assert after["components"] == 0
