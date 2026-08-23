@@ -474,7 +474,17 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
 
     @app.get("/console", include_in_schema=False, response_class=HTMLResponse)
     def console_page() -> str:
-        return _console.read_text()
+        """Serve the console with its Firebase project key substituted in.
+
+        Injected rather than committed so the same image serves any environment, and read at
+        request time so rotating the key does not need a rebuild. The key is not a secret —
+        Identity Platform treats it as a project selector, and it is visible in every client
+        that signs in — but it is environment-specific, which is reason enough not to hardcode
+        it into the page.
+        """
+        return _console.read_text().replace(
+            "__FIREBASE_BROWSER_KEY__", os.environ.get("BUGMINE_FIREBASE_BROWSER_KEY", "")
+        )
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

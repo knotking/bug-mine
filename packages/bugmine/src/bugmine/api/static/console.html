@@ -155,16 +155,26 @@ const LOGO = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-h
   <path d="M12 5.4v5.9l4.2 2.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
   <circle cx="12" cy="12" r="1.9" fill="currentColor"/></svg>`;
 
-const KEY='bugmine.key', app=document.getElementById('app');
+const KEY='bugmine.key', TOK='bugmine.idtoken', app=document.getElementById('app');
+/* The browser key identifies the Firebase project to its own API. It is not a secret: it is
+   visible in any client that signs in, and Identity Platform treats it as a project selector
+   rather than a credential. */
+const FB_KEY='__FIREBASE_BROWSER_KEY__';
 let S={tab:'catalog', me:null, summary:null};
 
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const when=t=>t?new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'never';
 const key=()=>localStorage.getItem(KEY)||'';
+const idToken=()=>localStorage.getItem(TOK)||'';
+const signedIn=()=>!!(key()||idToken());
+function clearCreds(){try{localStorage.removeItem(KEY);localStorage.removeItem(TOK);}catch{}}
 
 async function api(path,opts={}){
-  const r=await fetch(path,{...opts,headers:{'X-BugMine-Key':key(),'Content-Type':'application/json',...(opts.headers||{})}});
-  if(r.status===401){localStorage.removeItem(KEY);signin('Your session ended. Sign in again.');throw new Error('401');}
+  /* X-BugMine-Auth rather than Authorization: the gateway replaces Authorization with its own
+     service token, so a Firebase token sent there never arrives. */
+  const cred = idToken() ? {'X-BugMine-Auth':idToken()} : {'X-BugMine-Key':key()};
+  const r=await fetch(path,{...opts,headers:{...cred,'Content-Type':'application/json',...(opts.headers||{})}});
+  if(r.status===401){clearCreds();signin('Your session ended. Sign in again.');throw new Error('401');}
   if(!r.ok){const b=await r.json().catch(()=>({}));throw new Error(b?.detail?.error?.message||`Request failed (${r.status})`);}
   return r.status===204?null:r.json();
 }
@@ -176,19 +186,71 @@ function signin(msg){
     <p class="tagline">The bugs your scanners miss — breaking changes, deprecations and
       regressions across everything you depend on.</p>
     <form id="f">
-      <div class="field"><label for="k">API key</label>
-        <input id="k" type="password" placeholder="bmk_…" autofocus autocomplete="off"></div>
-      <button class="btn">Sign in</button>
+      <div class="field"><label for="em">Email</label>
+        <input id="em" type="email" autocomplete="username" autofocus></div>
+      <div class="field"><label for="pw">Password</label>
+        <input id="pw" type="password" autocomplete="current-password"></div>
+      <button class="btn" id="go">Sign in</button>
     </form>
-    ${msg?`<p class="error">${esc(msg)}</p>`:''}
-    <p class="note">Keys are issued with your account. Create one with
-      <code>bugmine-admin key mint</code>.</p>
+    <p id="err" class="error" style="${msg?'':'display:none'}">${esc(msg||'')}</p>
+    <p class="note">Accounts are created by invitation.
+      <a href="#" id="usekey">Sign in with an API key instead</a>.</p>
+    <form id="kf" style="display:none;margin-top:12px">
+      <div class="field"><label for="k">API key</label>
+        <input id="k" type="password" placeholder="bmk_…" autocomplete="off"></div>
+      <button class="btn ghost">Use key</button>
+    </form>
   </div></div>`;
+
+  const err = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display=''; };
+
+  document.getElementById('usekey').onclick=e=>{
+    e.preventDefault();
+    document.getElementById('kf').style.display='';
+    document.getElementById('k').focus();
+  };
+
   document.getElementById('f').onsubmit=async e=>{
     e.preventDefault();
+    const btn=document.getElementById('go');
+    btn.disabled=true; btn.textContent='Signing in…';
+    try{
+      /* Identity Platform holds the password; it is never sent to BugMine. */
+      const r=await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_KEY}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          email:document.getElementById('em').value.trim(),
+          password:document.getElementById('pw').value,
+          returnSecureToken:true})});
+      const body=await r.json();
+      if(!r.ok) throw new Error(
+        ({EMAIL_NOT_FOUND:'No account for that email.',
+          INVALID_PASSWORD:'That password was not accepted.',
+          INVALID_LOGIN_CREDENTIALS:'Those details were not accepted.',
+          USER_DISABLED:'That account is disabled.',
+          TOO_MANY_ATTEMPTS_TRY_LATER:'Too many attempts. Try again shortly.'
+         })[body?.error?.message?.split(' ')[0]] || 'Sign-in failed.');
+      clearCreds();
+      localStorage.setItem(TOK, body.idToken);
+      S.me=await api('/v1/whoami');
+      render();
+    }catch(ex){
+      clearCreds();
+      /* A Firebase account without a BugMine account is the invite-only rule working, not a
+         failed password — saying "sign-in failed" would send the user to reset it pointlessly. */
+      err(/no_account|403/.test(String(ex.message)) ?
+        'That sign-in worked, but the address has no BugMine account. Ask for an invite.' :
+        ex.message);
+      btn.disabled=false; btn.textContent='Sign in';
+    }
+  };
+
+  document.getElementById('kf').onsubmit=async e=>{
+    e.preventDefault();
+    clearCreds();
     localStorage.setItem(KEY,document.getElementById('k').value.trim());
     try{S.me=await api('/v1/whoami');render();}
-    catch{localStorage.removeItem(KEY);signin('That key was not accepted.');}
+    catch{clearCreds();signin('That key was not accepted.');}
   };
 }
 
@@ -330,7 +392,7 @@ async function render(){
     <nav>${Object.entries(TABS).map(([k,l])=>
       `<button data-t="${k}" aria-current="${S.tab===k}">${l}</button>`).join('')}</nav>
     <main id="body"><div class="sub">Loading…</div></main>`;
-  document.getElementById('out').onclick=()=>{localStorage.removeItem(KEY);S.me=null;signin();};
+  document.getElementById('out').onclick=()=>{clearCreds();S.me=null;signin();};
   app.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;render();});
   const body=document.getElementById('body');
   try{body.innerHTML=await VIEWS[S.tab]();wire();if(S.tab==='catalog')search();}

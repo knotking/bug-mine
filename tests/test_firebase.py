@@ -141,3 +141,45 @@ class TestAccountLookup:
         )
         assert r.status_code == 403
         assert r.json()["detail"]["error"]["code"] == "no_account"
+
+    def test_the_token_is_accepted_on_the_bugmine_auth_header(
+        self, engine: Engine, verifier, keypair, monkeypatch: pytest.MonkeyPatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        """API Gateway replaces `Authorization` with its own service token before the request
+        reaches this process, so a browser cannot deliver a Firebase token on that header. It
+        would be discarded and the gateway's token verified instead, failing as
+        `token_key_unknown` — an error naming a credential the caller never sent."""
+        from bugmine.api import create_app
+        from fastapi.testclient import TestClient
+
+        app = create_app(engine)
+        app.state.firebase = verifier
+        client = TestClient(app)
+
+        r = client.get(
+            "/v1/whoami", headers={"X-BugMine-Auth": _token(keypair, sub="nobody")}
+        )
+        # Reaching `no_account` proves the token was verified: an unknown identity is refused
+        # after verification, where a discarded one fails earlier and differently.
+        assert r.status_code == 403
+        assert r.json()["detail"]["error"]["code"] == "no_account"
+
+    def test_the_bugmine_auth_header_wins_over_a_gateway_authorization(
+        self, engine: Engine, verifier, keypair, monkeypatch: pytest.MonkeyPatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        """The realistic shape in production: the gateway's token is present and irrelevant."""
+        from bugmine.api import create_app
+        from fastapi.testclient import TestClient
+
+        app = create_app(engine)
+        app.state.firebase = verifier
+        client = TestClient(app)
+
+        r = client.get(
+            "/v1/whoami",
+            headers={
+                "Authorization": "Bearer gateway-issued-token-not-ours",
+                "X-BugMine-Auth": _token(keypair, sub="nobody"),
+            },
+        )
+        assert r.json()["detail"]["error"]["code"] == "no_account"

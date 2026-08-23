@@ -60,6 +60,7 @@ def require_principal(
     request: Request,
     authorization: str | None = Header(default=None),
     x_bugmine_key: str | None = Header(default=None, alias="X-BugMine-Key"),
+    x_bugmine_auth: str | None = Header(default=None, alias="X-BugMine-Auth"),
 ) -> Principal:
     """Resolve the caller's principal from an API key.
 
@@ -71,16 +72,28 @@ def require_principal(
     workaround for that constraint, not a second way to authenticate: it resolves to the same
     principal through the same lookup, and it becomes unnecessary the moment the service can be
     invoked anonymously.
+
+    `X-BugMine-Auth` carries a Firebase ID token for the same reason, and it is not optional in
+    front of the gateway: API Gateway replaces `Authorization` with its own service token before
+    the request reaches this process. A browser sending a Firebase token on `Authorization`
+    therefore has it silently discarded and the gateway's token verified in its place, which
+    fails as `token_key_unknown` — an error that describes the wrong credential entirely.
     """
     bearer = ""
     if authorization and authorization.lower().startswith("bearer "):
         bearer = authorization.split(" ", 1)[1].strip()
 
+    # Checked before Authorization: in front of the gateway that header holds the gateway's own
+    # token, so an explicit Firebase header is the only one the browser controls end to end.
+    if firebase_token := (x_bugmine_auth or "").strip():
+        return _principal_from_firebase(request, firebase_token)
+
     token = (x_bugmine_key or "").strip()
     if not token and bearer.startswith(KEY_PREFIX):
         token = bearer
 
-    # A bearer credential that is not an API key is a Firebase ID token — the console's path.
+    # A bearer credential that is not an API key is a Firebase ID token — the direct path, for
+    # callers reaching Cloud Run without the gateway in between.
     if not token and bearer:
         return _principal_from_firebase(request, bearer)
 
