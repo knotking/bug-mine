@@ -21,7 +21,9 @@ locals {
 resource "google_cloud_tasks_queue" "work" {
   for_each = local.queues
 
-  name     = "bugmine-${each.key}"
+  # Cloud Tasks queue IDs permit only letters, digits and hyphens — an underscore is a 400.
+  # Job type names use underscores, so translate rather than renaming the job types.
+  name     = "bugmine-${replace(each.key, "_", "-")}"
   location = var.region
 
   rate_limits {
