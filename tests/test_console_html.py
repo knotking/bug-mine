@@ -119,11 +119,11 @@ def test_every_top_level_tab_exists() -> None:
     assert tabs <= views, f"tabs with no view: {sorted(tabs - views)}"
 
 
-def test_every_landing_tab_has_a_panel() -> None:
-    """The nav is built from LAND and dispatches through PANELS. A name in one and not the other
-    renders an empty page on click, with nothing thrown to say why."""
+def test_every_landing_nav_link_has_a_section() -> None:
+    """The nav is anchors into a scrolling page. A link whose id is not on the page scrolls
+    nowhere and reports nothing — the failure is silent, which is why it is asserted here."""
     source = _source()
     block = re.search(r"const LAND = \{([^}]*)\}", source).group(1)
-    land = set(re.findall(r"(\w+):'[^']*'", block))
-    panels = set(re.findall(r"^  (\w+): \(\) =>", source, re.M))
-    assert land <= panels, f"landing tabs with no panel: {sorted(land - panels)}"
+    links = set(re.findall(r"(\w+):'[^']*'", block))
+    sections = set(re.findall(r'<section[^>]*id="(\w+)"', source))
+    assert links <= sections, f"nav links with no section: {sorted(links - sections)}"
