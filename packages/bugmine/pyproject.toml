@@ -24,6 +24,7 @@ dependencies = [
 bugmine = "bugmine.cli:main"
 bugmine-mcp = "bugmine.mcp_server:main"
 bugmine-verify = "bugmine.verify:main"
+bugmine-admin = "bugmine.admin:main"
 
 [build-system]
 requires = ["hatchling"]

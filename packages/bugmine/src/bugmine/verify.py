@@ -102,10 +102,23 @@ def _check_cross_tenant_isolation(engine) -> list[Check]:  # type: ignore[no-unt
             text("SELECT count(*) FROM job WHERE payload->>'marker' = :m"), {"m": marker}
         ).scalar_one()
 
+    # Clean up. Verification writes to the real database, so leaving fixtures behind means
+    # every run accumulates more — and a production tenant list that fills with `verify-*`
+    # entries is indistinguishable from a data-quality problem when someone finds it later.
+    with tenant_session(engine, None) as s:
+        s.execute(text("DELETE FROM job WHERE payload->>'marker' = :m"), {"m": marker})
+        s.execute(text("DELETE FROM tenant WHERE id IN (:a, :b)"), {"a": str(a), "b": str(b)})
+
+    with tenant_session(engine, None, commit=False) as s:
+        residue = s.execute(
+            text("SELECT count(*) FROM tenant WHERE slug LIKE 'verify-%'")
+        ).scalar_one()
+
     return [
         Check("tenant B cannot see tenant A's job", seen_by_b == 0, f"rows={seen_by_b}"),
         Check("anonymous session sees no tenant jobs", seen_anon == 0, f"rows={seen_anon}"),
         Check("tenant A can see its own job", seen_by_a == 1, f"rows={seen_by_a}"),
+        Check("verification left no fixtures behind", residue == 0, f"verify-* tenants={residue}"),
     ]
 
 
