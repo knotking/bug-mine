@@ -572,7 +572,7 @@ async function api(path,opts={}){
 /* ---------------- sign in ---------------- */
 
 
-const LAND = {why:'Why', motivation:'Motivation', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
+const LAND = {why:'Why BugMine', search:'Search', how:'How it works', coverage:'Coverage', editor:'In your editor', api:'API'};
 let hits=[], filter='all', lastQ='';
 
 const MAG = `<svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -661,18 +661,12 @@ function signin(msg){
           research, cited in our design notes. Our own precision is a measured, reported metric
           rather than a claim — the category is defined by a 92% error rate, so asserting
           accuracy would be worth nothing.</p>
-      </div>
-    </section>
 
-    <section id="motivation">
-      <div class="wrap center">
-        <div class="kicker">Motivation</div>
-        <h2 class="sec">The gap is widening, not closing</h2>
+        <h2 class="sec" style="margin-top:64px">And the gap is widening, not closing</h2>
         <p class="secsub">Every dependency tool rests on one assumption: dependencies are
           versioned, and change is an explicit act. You pin, you review a diff, you upgrade
           deliberately. That assumption is quietly failing.</p>
-
-        <div class="args">
+<div class="args">
           <div class="arg">
             <h3>Hosted models break versioning outright</h3>
             <span class="big">52% → 10%</span>
@@ -800,12 +794,19 @@ function signin(msg){
               <code>search_bugs</code>, <code>scan_repo</code>, <code>get_scan</code>. Ask
               "what breaks if I take pydantic 2.14?" and the answer cites records.</p>
             <pre class="code">{"mcpServers": {"bugmine": {
-  "command": "bugmine-mcp",
-  "env": {"BUGMINE_KEY": "bmk_…"}}}}</pre></div>
+  "command": "uvx",
+  "args": ["--from",
+    "git+https://github.com/knotking/bug-mine#subdirectory=packages/bugmine",
+    "bugmine-mcp"],
+  "env": {
+    "BUGMINE_URL": "https://bugmine-5j2s4vtc.uc.gateway.dev",
+    "BUGMINE_API_KEY": "bmk_…"}}}}</pre></div>
           <div class="idecard"><b>Command line</b>
             <p>Resolves your lockfile locally and sends names and versions only. Source never
               leaves the machine — that is the design, not a setting.</p>
-            <pre class="code">$ bugmine check
+            <pre class="code">$ export BUGMINE_URL=https://bugmine-5j2s4vtc.uc.gateway.dev
+$ export BUGMINE_API_KEY=bmk_…
+$ bugmine check
 3 findings · 41 suppressed as unreachable
 2 components not covered</pre></div>
           <div class="idecard"><b>CI · GitHub</b>
@@ -814,8 +815,11 @@ function signin(msg){
             <pre class="code">POST /v1/scans {"repo_url": "…"}
 GET  /v1/scans/{id}/findings</pre></div>
         </div>
-        <p class="secsub" style="margin-top:20px;font-size:13.4px">The MCP server and CLI are
-          built; the GitHub app is not yet. We would rather say which is which.</p>
+        <p class="secsub" style="margin-top:20px;font-size:13.4px">The MCP server and CLI work
+          today and install straight from the repository. The GitHub app does not exist yet, and
+          reachability covers Python and JavaScript — other ecosystems are catalogued and
+          searchable but their findings come back undetermined rather than narrowed. We would
+          rather say which is which.</p>
       </div>
     </section>
 
@@ -846,8 +850,7 @@ GET  /v1/scans/{id}/findings</pre></div>
           <a href="#search">Search</a><a href="#coverage">Coverage</a>
           <a href="#editor">In your editor</a><a href="#api">API</a></div>
         <div><h4>How</h4>
-          <a href="#why">Why it exists</a><a href="#motivation">Motivation</a>
-          <a href="#how">Pipeline</a><span class="li">Reachability</span>
+          <a href="#why">Why BugMine</a><a href="#how">Pipeline</a><span class="li">Reachability</span>
           <span class="li">Citations</span></div>
         <div><h4>Account</h4>
           <a href="#" id="foot-signin">Sign in</a>
