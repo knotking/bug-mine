@@ -63,6 +63,30 @@ def test_dark_palette_is_defined_for_both_the_media_query_and_the_explicit_choic
     )
 
 
+def test_every_top_right_bar_reserves_room_for_the_theme_toggle() -> None:
+    """The toggle is position:fixed in the top-right corner with a high z-index, so any bar that
+    puts a control there must reserve the space. It covered Sign out in the console header, and
+    then covered Sign in on the landing page — the same bug twice, because the first fix pinned
+    only the one selector it happened to be about.
+    """
+    source = _source()
+    toggle = re.search(r"\.theme\{[^}]*right:(\d+)px", source)
+    assert toggle, "theme toggle position not found"
+    needed = int(toggle.group(1)) + 100  # three 28px buttons plus gaps and padding
+
+    for selector in ("header", ".topbar"):
+        rule = re.search(re.escape(selector) + r"\{[^}]*padding:([^;}]+)", source)
+        assert rule, f"{selector} has no padding rule"
+        # Right padding is the second value in "a b", the second of "a b c d", or the only one.
+        parts = rule.group(1).split()
+        right = parts[1] if len(parts) > 1 else parts[0]
+        pixels = [int(n) for n in re.findall(r"(\d+)px", right)]
+        assert pixels, f"{selector} right padding is not in px: {right}"
+        assert max(pixels) >= needed, (
+            f"{selector} reserves {max(pixels)}px, needs {needed}px to clear the toggle"
+        )
+
+
 def test_the_header_reserves_room_for_the_fixed_theme_toggle() -> None:
     """The toggle is `position:fixed` at the top-right with a high z-index, and the header puts
     the Sign out button in that same corner. Without a reservation the toggle paints over it:
