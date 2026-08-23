@@ -108,3 +108,35 @@ def test_every_landing_nav_link_has_a_section() -> None:
     links = set(re.findall(r"(\w+):'[^']*'", block))
     sections = set(re.findall(r'<section[^>]*id="(\w+)"', source))
     assert links <= sections, f"nav links with no section: {sorted(links - sections)}"
+
+
+def test_the_viewport_is_declared() -> None:
+    """Without it a phone renders at desktop width and scales down, so every media query below
+    is dead and the page is unreadable regardless of what the CSS says."""
+    assert re.search(r'<meta name="viewport"[^>]*width=device-width', _source())
+
+
+def test_wide_tables_scroll_inside_their_own_box() -> None:
+    """A table wider than the screen widens the page itself, and the whole layout scrolls
+    sideways. Wrapping it keeps the overflow local, which is why every console table is wrapped
+    rather than the body being set to overflow-x:hidden — hiding it clips content instead."""
+    source = _source()
+    assert source.count("<table>") == source.count('class="tablewrap"'), (
+        "every table needs a scroll wrapper"
+    )
+    assert re.search(r"\.tablewrap\{[^}]*overflow-x:auto", source)
+
+
+def test_the_nav_survives_narrow_screens() -> None:
+    """It used to be display:none below 820px, which left a phone with no navigation at all —
+    the sections were reachable only by scrolling past everything above them."""
+    source = _source()
+    rule = re.search(r"@media\(max-width:820px\)\{(.*?)\n\}", source, re.S)
+    assert rule, "820px breakpoint not found"
+    assert "display:none" not in rule.group(1).split(".navtabs a")[0]
+
+
+def test_narrow_screens_are_covered_by_breakpoints() -> None:
+    """A phone is ~390px wide. Without a rule at or below 640 the desktop layout applies."""
+    widths = [int(w) for w in re.findall(r"@media\(max-width:(\d+)px\)", _source())]
+    assert widths and min(widths) <= 640, f"narrowest breakpoint is {min(widths) if widths else None}"
