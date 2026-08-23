@@ -15,6 +15,7 @@ Each design skill in `.claude/skills/` writes into its own subdirectory:
 | `docs/adr/` | Numbered architecture decision records, `NNNN-title.md`, append-only | `/adr` |
 | `docs/design/` | Top-level design docs that link the above together | `/design-doc` |
 | `docs/motivation/` | Research-backed motivation: problem evidence, trajectory, market, solution | — |
+| `docs/plan/` | Implementation plans | `/plan` |
 
 ## Conventions
 
