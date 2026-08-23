@@ -70,6 +70,7 @@ still open. Everything else in `docs/` is the detailed version of a section in t
 | [`docs/motivation/`](docs/motivation/) | Researched problem evidence, trajectory, market sizing, and the solution mapped to both |
 | [`docs/plan/mvp.md`](docs/plan/mvp.md) | MVP plan — multi-tenancy, dual-trigger ingestion, scanning, client integrations, GCP mapping and costs |
 | [`docs/plan/token-accounting.md`](docs/plan/token-accounting.md) | LLM token attribution and ceiling enforcement across system, tenant, team and user |
+| [`docs/plan/mvp-sequence.md`](docs/plan/mvp-sequence.md) | Implementation order — eleven milestones, dependencies, and the test that gates each |
 | [`docs/api/`](docs/api/) | API contract — OpenAPI 3.1 spec and the decisions behind it |
 | [`docs/adr/`](docs/adr/) | Decision records — append-only |
 
