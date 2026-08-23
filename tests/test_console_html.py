@@ -81,13 +81,15 @@ def test_every_settings_view_exists() -> None:
     """The sub-nav is built from SETTINGS and dispatches through VIEWS. A name in one and not
     the other renders `undefined is not a function` at click time and nowhere earlier."""
     source = _source()
-    settings = set(re.findall(r"(\w+):'[^']*'", re.search(r"const SETTINGS=\{([^}]*)\}", source).group(1)))
+    block = re.search(r"const SETTINGS=\{([^}]*)\}", source).group(1)
+    settings = set(re.findall(r"(\w+):'[^']*'", block))
     views = set(re.findall(r"^  async (\w+)\(\)\{", source, re.M))
     assert settings <= views, f"settings screens with no view: {sorted(settings - views)}"
 
 
 def test_every_top_level_tab_exists() -> None:
     source = _source()
-    tabs = set(re.findall(r"(\w+):'[^']*'", re.search(r"const TABS=\{([^}]*)\}", source).group(1)))
+    block = re.search(r"const TABS=\{([^}]*)\}", source).group(1)
+    tabs = set(re.findall(r"(\w+):'[^']*'", block))
     views = set(re.findall(r"^  async (\w+)\(\)\{", source, re.M))
     assert tabs <= views, f"tabs with no view: {sorted(tabs - views)}"
