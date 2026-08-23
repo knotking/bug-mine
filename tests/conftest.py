@@ -16,6 +16,7 @@ import pytest
 from bugmine.db import make_engine
 from bugmine.models import Tenant
 from sqlalchemy import Engine, text
+from starlette.testclient import TestClient
 
 ADMIN_URL = os.environ.get(
     "BUGMINE_TEST_ADMIN_URL",
@@ -118,3 +119,29 @@ def _resolvable_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
         return real(host)
 
     monkeypatch.setattr(urlguard, "_resolve", fake)
+
+
+@pytest.fixture
+def worker_client(engine: Engine) -> Iterator[TestClient]:
+    """The worker app with its cloud dependencies faked.
+
+    Storage is a fake rather than a mock so a snapshot really is written and read back — the
+    tar round-trip is where path traversal and encoding problems live, and a mock would assert
+    the call was made while proving nothing about the bytes.
+
+    The model client is never constructed: the analysis path is static narrowing only, and
+    building a real Vertex client here would make the tests need credentials to run.
+    """
+    from unittest.mock import patch
+
+    from fakes import FakeStorageClient
+
+    with patch("bugmine.worker.app.storage.Client", FakeStorageClient), patch(
+        "bugmine.worker.app.genai.Client", lambda **_: None
+    ):
+        from bugmine.worker.app import create_worker_app
+
+        app = create_worker_app(engine)
+        app.state.snapshot_bucket = "snap"
+        app.state.artifact_bucket = "artifacts"
+        yield TestClient(app)

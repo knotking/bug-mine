@@ -31,6 +31,11 @@ class FakeBlob:
     def download_as_text(self) -> str:
         return self._bucket.objects[self.name].decode()
 
+    def download_as_bytes(self) -> bytes:
+        """Snapshots are gzipped tar, so the bytes path is not optional — decoding one as text
+        corrupts it in a way that only surfaces as an unhelpful tarfile error."""
+        return self._bucket.objects[self.name]
+
 
 @dataclass
 class FakeBucket:

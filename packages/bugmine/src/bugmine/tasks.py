@@ -80,3 +80,19 @@ def extract_target() -> QueueTarget:
         url=os.environ["BUGMINE_EXTRACT_URL"].rstrip("/") + "/work/extract",
         service_account=os.environ["BUGMINE_TASK_INVOKER_SA"],
     )
+
+
+def scan_fetch_target() -> QueueTarget:
+    return QueueTarget(
+        queue="bugmine-scan-fetch",
+        url=os.environ["BUGMINE_SCAN_FETCH_URL"].rstrip("/") + "/work/scan/fetch",
+        service_account=os.environ["BUGMINE_TASK_INVOKER_SA"],
+    )
+
+
+def scan_analyze_target() -> QueueTarget:
+    return QueueTarget(
+        queue="bugmine-scan-analyze",
+        url=os.environ["BUGMINE_SCAN_ANALYZE_URL"].rstrip("/") + "/work/scan/analyze",
+        service_account=os.environ["BUGMINE_TASK_INVOKER_SA"],
+    )

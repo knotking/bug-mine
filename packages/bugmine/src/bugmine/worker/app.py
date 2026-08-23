@@ -12,9 +12,13 @@ services with separate identities, and only extract can reach a model.
 
 from __future__ import annotations
 
+import io
 import logging
 import os
+import tarfile
+import tempfile
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -23,23 +27,29 @@ from google.cloud import storage
 from pydantic import BaseModel
 
 from bugmine import metering
+from bugmine import scan as scan_mod
 from bugmine.catalog import write
 from bugmine.db import make_engine, tenant_session
+from bugmine.inventory import collect
 from bugmine.models import (
     CostBearer,
     JobState,
     JobType,
     PrivacyScope,
     RecordOrigin,
+    Scan,
     SubjectDomain,
     UsagePurpose,
 )
 from bugmine.models.jobs import Job
 from bugmine.worker import crawl as crawl_mod
 from bugmine.worker import extract as extract_mod
-from bugmine.worker import structured
+from bugmine.worker import snapshot, structured
 
 logger = logging.getLogger("bugmine.worker")
+
+
+
 
 router = APIRouter(prefix="/work", tags=["worker"])
 
@@ -49,6 +59,20 @@ class CrawlRequest(BaseModel):
     subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
     component_ref: str | None = None
     ecosystem: str | None = None
+
+
+class ScanFetchRequest(BaseModel):
+    repo_url: str
+    tenant_id: str
+    ref: str | None = None
+    scan_id: str | None = None
+
+
+class ScanAnalyzeRequest(BaseModel):
+    snapshot_uri: str
+    tenant_id: str
+    scan_id: str
+    commit_sha: str | None = None
 
 
 class ExtractRequest(BaseModel):
@@ -61,18 +85,193 @@ class ExtractRequest(BaseModel):
     for everything else. `structured` or `llm` force one."""
 
 
-def _record_job(app: Any, job_type: JobType, payload: dict[str, Any]) -> uuid.UUID:
-    with tenant_session(app.state.engine, None) as s:
-        job = Job(job_type=job_type, state=JobState.RUNNING, payload=payload)
+@router.post("/scan/fetch")
+def do_scan_fetch(body: ScanFetchRequest, request: Request) -> dict[str, Any]:
+    """Clone a repository into a snapshot, then hand off to analysis.
+
+    This worker has egress and no model; the analyser has a model and no egress. The split is
+    the security boundary (ADR-0005, NFR-42), not an organisational one: a repository is
+    content chosen by a tenant, and a model reachable from a process that can also make
+    outbound requests is what prompt injection needs to become exfiltration.
+    """
+    app = request.app
+    tenant_id = uuid.UUID(body.tenant_id)
+    job_id = _record_job(
+        app, JobType.SCAN_FETCH, body.model_dump(mode="json"), tenant_id=tenant_id
+    )
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            commit_sha = snapshot.clone(body.repo_url, root, ref=body.ref)
+            stored = snapshot.store(
+                root,
+                bucket_name=app.state.snapshot_bucket,
+                client=app.state.storage,
+                tenant_id=tenant_id,
+            )
+    except snapshot.SnapshotError as exc:
+        logger.exception("scan fetch failed for %s", body.repo_url)
+        _finish_job(
+            app, job_id, JobState.FAILED, f"{exc.code}: {exc}"[:500], tenant_id=tenant_id
+        )
+        raise HTTPException(status_code=422, detail={"error": {"code": exc.code}}) from exc
+    except Exception as exc:
+        logger.exception("scan fetch failed for %s", body.repo_url)
+        _finish_job(
+            app,
+            job_id,
+            JobState.FAILED,
+            f"{type(exc).__name__}: {exc}"[:500],
+            tenant_id=tenant_id,
+        )
+        raise HTTPException(status_code=500, detail={"error": {"code": "fetch_failed"}}) from exc
+
+    scan_id = body.scan_id
+    with tenant_session(app.state.engine, tenant_id) as s:
+        if scan_id is None:
+            scan = Scan(job_id=job_id, tenant_id=tenant_id, repo_ref=body.repo_url)
+            s.add(scan)
+            s.flush()
+            scan_id = str(scan.id)
+        else:
+            existing = s.get(Scan, uuid.UUID(scan_id))
+            if existing is not None:
+                existing.commit_sha = commit_sha
+
+    if os.environ.get("BUGMINE_SCAN_ANALYZE_URL"):
+        from bugmine import tasks
+
+        tasks.enqueue(
+            tasks.scan_analyze_target(),
+            {
+                "snapshot_uri": stored.uri,
+                "tenant_id": str(tenant_id),
+                "scan_id": scan_id,
+                "commit_sha": commit_sha,
+            },
+        )
+
+    _finish_job(app, job_id, JobState.SUCCEEDED, tenant_id=tenant_id)
+    return {
+        "job_id": str(job_id),
+        "scan_id": scan_id,
+        "snapshot_uri": stored.uri,
+        "commit_sha": commit_sha,
+        "files": stored.file_count,
+        "bytes": stored.bytes_stored,
+    }
+
+
+@router.post("/scan/analyze")
+def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any]:
+    """Inventory the snapshot, match the catalog, narrow by reachability, write findings.
+
+    No egress beyond the model endpoint. Everything this reads came from the fetch worker, and
+    everything it writes is grounded in a catalog record.
+    """
+    app = request.app
+    tenant_id = uuid.UUID(body.tenant_id)
+    scan_id = uuid.UUID(body.scan_id)
+    job_id = _record_job(
+        app, JobType.SCAN_ANALYZE, body.model_dump(mode="json"), tenant_id=tenant_id
+    )
+
+    try:
+        blob_bytes = _read_snapshot(app, body.snapshot_uri)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with tarfile.open(fileobj=io.BytesIO(blob_bytes), mode="r:gz") as archive:
+                # filter="data" refuses absolute paths and traversal members. The archive was
+                # written by our own fetch worker, but it was built from a tenant's repository
+                # and a file named ../../etc/passwd is a thing a repository can contain.
+                archive.extractall(root, filter="data")
+
+            inventory = collect(root)
+            sources = snapshot.collect_sources(root)
+
+        with tenant_session(app.state.engine, tenant_id) as s:
+            outcome = scan_mod.analyse(
+                s,
+                scan_id=scan_id,
+                dependencies=list(inventory.dependencies),
+                sources=sources,
+            )
+            for finding in outcome.findings:
+                s.add(finding)
+
+            record = s.get(Scan, scan_id)
+            if record is not None:
+                record.commit_sha = body.commit_sha
+                record.uncovered_components = len(outcome.uncovered)
+                # Every finding is built from a match, so grounding cannot be partial here.
+                record.grounding_complete = True
+    except Exception as exc:
+        logger.exception("scan analysis failed for %s", body.snapshot_uri)
+        _finish_job(
+            app,
+            job_id,
+            JobState.FAILED,
+            f"{type(exc).__name__}: {exc}"[:500],
+            tenant_id=tenant_id,
+        )
+        raise HTTPException(status_code=500, detail={"error": {"code": "analysis_failed"}}) from exc
+
+    _finish_job(app, job_id, JobState.SUCCEEDED, tenant_id=tenant_id)
+    return {
+        "job_id": str(job_id),
+        "scan_id": str(scan_id),
+        "dependencies": len(inventory.dependencies),
+        "sources_analysed": len(sources),
+        "findings": len(outcome.findings),
+        # Surfaced rather than hidden: a scan that suppressed everything is indistinguishable
+        # from one that found nothing, and the difference is the entire product claim.
+        "suppressed_unreachable": outcome.suppressed,
+        "uncovered_components": len(outcome.uncovered),
+        "unanalysed_ecosystems": sorted(outcome.unanalysed_ecosystems),
+    }
+
+
+def _read_snapshot(app: Any, uri: str) -> bytes:
+    bucket_name, _, blob_name = uri.removeprefix("gs://").partition("/")
+    return app.state.storage.bucket(bucket_name).blob(blob_name).download_as_bytes()
+
+
+def _record_job(
+    app: Any,
+    job_type: JobType,
+    payload: dict[str, Any],
+    *,
+    tenant_id: uuid.UUID | None = None,
+) -> uuid.UUID:
+    """Record a job, under its tenant when it has one.
+
+    The session has to carry the tenant, not just the row: RLS checks the write against the
+    session's tenant context, so inserting a tenant-scoped job from an anonymous session is
+    refused outright.
+    """
+    with tenant_session(app.state.engine, tenant_id) as s:
+        job = Job(job_type=job_type, state=JobState.RUNNING, payload=payload, tenant_id=tenant_id)
         s.add(job)
         s.flush()
         return job.id
 
 
 def _finish_job(
-    app: FastAPI, job_id: uuid.UUID, state: JobState, reason: str | None = None
+    app: FastAPI,
+    job_id: uuid.UUID,
+    state: JobState,
+    reason: str | None = None,
+    *,
+    tenant_id: uuid.UUID | None = None,
 ) -> None:
-    with tenant_session(app.state.engine, None) as s:
+    """Close out a job. The tenant must match the one it was opened under.
+
+    An anonymous session sees only tenant-less rows, so finishing a tenant-scoped job from one
+    finds nothing and returns quietly — leaving the job RUNNING forever with no error to say
+    why, which is indistinguishable from a worker that hung.
+    """
+    with tenant_session(app.state.engine, tenant_id) as s:
         job = s.get(Job, job_id)
         if job is not None:
             job.state = state
@@ -209,6 +408,7 @@ def create_worker_app(engine: Any = None) -> FastAPI:
     app = FastAPI(title="BugMine Worker", version="1.0.0")
     app.state.engine = engine or make_engine()
     app.state.artifact_bucket = os.environ.get("BUGMINE_ARTIFACT_BUCKET", "")
+    app.state.snapshot_bucket = os.environ.get("BUGMINE_SNAPSHOT_BUCKET", "")
     app.state.model = os.environ.get("BUGMINE_MODEL", "gemini-3.7-flash")
     app.state.storage = storage.Client()
 
