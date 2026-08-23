@@ -34,11 +34,13 @@ Every catalog record has exactly one scope. This is the whole tenancy model in o
 
 | Scope | Written by | Visible to | Example |
 | --- | --- | --- | --- |
-| **`global`** | Admin-triggered ingestion | **All tenants** | "langchain 0.3.1 changed retry semantics" |
+| **`public`** | Admin-triggered ingestion from public sources | **Anyone, unauthenticated** | "langchain 0.3.1 changed retry semantics" |
+| **`subscriber`** | Evals, curation, promoted records | **Authenticated tenants** | An LLM regression found by our own eval suite |
 | **`tenant`** | Tenant-triggered ingestion, and that tenant's scans | **Owning tenant only** | "our internal payments-sdk 2.4 breaks on retry" |
 
-Retrieval for any tenant is **`global ∪ own-tenant`**, never another tenant's private records.
-This is FR-11's "shared unless a private system", made concrete.
+Retrieval for an authenticated tenant is **`public ∪ subscriber ∪ own-tenant`**. Unauthenticated
+retrieval is **`public` only**. No path returns another tenant's records. This is FR-72 – FR-75,
+refining FR-11's original "shared unless a private system".
 
 **Tenant-private records never become global in the MVP.** Promotion requires corroboration
 across unaffiliated tenants (ADR-0004), and with ten design partners nothing will reach a
@@ -53,6 +55,7 @@ NFR-19 requires isolation at the gateway **and** the data layer, never one alone
 | --- | --- | --- |
 | **Gateway** | Auth resolves `tenant_id`; it is never read from a request body or path | Forged or manipulated tenant references |
 | **Database** | Postgres **row-level security**, `tenant_id` set per connection from the session | Any application bug that forgets a `WHERE` clause |
+| **Scope** | Every query filters on privacy scope; the unauthenticated path is hard-wired to `public` | A `tenant` record reaching public search |
 | **Storage** | GCS object prefixes per tenant, IAM conditions on the prefix | Cross-tenant artifact reads |
 | **Jobs** | `tenant_id` on every job row; workers assume tenant context, never choose it | A worker processing the wrong tenant's payload |
 
@@ -201,6 +204,22 @@ Runs in two transports from one codebase:
 70%-of-security-fixes-break-your-code problem *at the moment the decision is being made*, inside
 the editor, before the dependency is added — which is a thing a dashboard structurally cannot do.
 
+### Public search
+
+An unauthenticated search bar over `public` records only (FR-73). Two consequences worth
+designing for rather than discovering:
+
+- **It is an acquisition surface.** Individual bug pages should be server-rendered and indexable;
+  developers arriving from a search engine looking for a specific defect are the cheapest
+  qualified traffic available.
+- **It is a scraping target.** Everything exposed here is reproducible by anyone patient. That is
+  acceptable *because* the underlying sources are already public — but it means nothing
+  `subscriber` or `tenant` may ever leak into this path, including through error messages, result
+  counts, or autocomplete.
+
+Rate limiting and a no-authentication path make this the most exposed surface in the system, and
+the only one an attacker can probe without an account.
+
 ### GitHub App
 
 `pull_request` webhook → enqueue server-side scan → Check Run. Reports only findings surviving
@@ -211,6 +230,7 @@ will be thin early, and silence would read as a clean bill of health.
 
 | Consumer | Mechanism |
 | --- | --- |
+| Public search visitor | **None** — `public` scope only, rate-limited |
 | Web / IDE user | Google OIDC → short-lived session |
 | CLI / MCP local | Device-code flow → refresh token in the OS keychain |
 | CI / bots | Tenant-scoped API key, prefix-identifiable, revocable |

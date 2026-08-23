@@ -109,6 +109,50 @@ and scoping it is deliberately left to its own design pass.
 
 ---
 
+## 7. Privacy scope
+
+Added 2026-08-22. Refines FR-11, which said only "shared unless a private system" — that is now
+too coarse, because there are three distinct audiences, not two.
+
+| ID | Requirement |
+| --- | --- |
+| **FR-72** | Every catalog record carries a **privacy scope**: `public`, `subscriber`, or `tenant`. |
+| **FR-73** | `public` records are searchable **without authentication**, via the public search bar. |
+| **FR-74** | Records derived from a tenant's repository, scans, or private sources are `tenant` scope and **never** appear in public or subscriber search. |
+| **FR-75** | Scope may always be **narrowed**. Widening requires the corroboration path (FR-44) and is audited. |
+
+### The three scopes
+
+| Scope | Visible to | Typically holds | Origin |
+| --- | --- | --- | --- |
+| **`public`** | Anyone, unauthenticated | Bugs crawled from public sources | `crawled` |
+| **`subscriber`** | Authenticated tenants | Eval-derived findings; curated and enriched records | `eval_derived`, promoted |
+| **`tenant`** | The owning tenant only | Anything observed in that tenant's code or private sources | `scan_derived`, tenant-triggered `crawled` |
+
+**FR-75 is the safety property.** Narrowing a record's scope can only reduce exposure, so it needs
+no ceremony. Widening can expose something that was private, so it takes the same path as
+promotion — corroboration, sanitisation, verification — and leaves an audit record. A system where
+both directions are equally easy will eventually widen something by accident, and exposure cannot
+be undone.
+
+### Why `subscriber` exists as a middle tier
+
+A two-tier public/private split would force a choice between giving away eval-derived records or
+hiding the whole catalog. Neither is right:
+
+- **Public crawled records are an acquisition channel.** Indexable pages describing real defects
+  bring developers in through search — the same mechanism that makes public vulnerability
+  databases a top-of-funnel asset for the incumbents. Withholding them costs distribution and
+  protects nothing, since the underlying sources are public anyway.
+- **Eval-derived records cost real money to produce** and exist nowhere else. They are the most
+  differentiated content in the catalog. Publishing them free hands over the one thing that
+  cannot be replicated by crawling.
+
+So the paid product is not "access to bug data" — public bugs are free. It is **reachability
+against your specific stack**, plus the records only BugMine can produce.
+
+---
+
 ## Non-goals
 
 - ~~**Evals on LLMs and repos to identify bugs**~~ — **no longer a non-goal as of 2026-08-22.**

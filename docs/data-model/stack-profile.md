@@ -72,7 +72,8 @@ data.
 | `subject_ref` | string | The specific component, e.g. `couchbase-server` |
 | `bug_type` | enum(7) | Axis 2 — §1 |
 | `applicability` | union | §2 |
-| `visibility` | enum | `shared` \| `private:<scope>` — FR-11; scope shape blocked on Q4 |
+| `privacy_scope` | enum | `public` \| `subscriber` \| `tenant` — FR-72. Narrowing is free; widening takes the promotion path (FR-75) |
+| `tenant_id` | FK? | Set only when `privacy_scope = tenant`. A tenant-scoped record with no tenant is a bug, not a default |
 | `first_seen_at` | timestamptz | UTC |
 
 ### `BugVersion` — one observed state of a record
