@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bugmine import sweep as sweep_mod
-from bugmine import tasks
+from bugmine import tasks, urlguard
 from bugmine.api import schemas as S
 from bugmine.api.deps import Principal, anonymous_session, require_principal, tenant_db
 from bugmine.catalog import Query, retrieve
@@ -307,10 +307,18 @@ def create_source(
 ) -> S.SourceOut:
     """Add a tenant crawl source.
 
-    Output is `tenant` scope and never reaches public search. The URL is attacker-chosen by
-    definition, so SSRF validation belongs here — it is not implemented yet, which is why
-    tenant ingestion is the last milestone rather than this one.
+    Output is `tenant` scope and never reaches public search.
+
+    The URL is attacker-chosen by definition, so it is validated before it is ever stored —
+    rejecting at write time rather than at fetch time means a denied URL never sits in the
+    database waiting for a scheduler to pick it up.
     """
+    if rejection := urlguard.check(body.url):
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": rejection.code, "message": rejection.message}},
+        )
+
     src = sweep_mod.add_source(
         session,
         url=body.url,

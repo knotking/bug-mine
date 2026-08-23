@@ -15,6 +15,8 @@ from dataclasses import dataclass
 import httpx
 from google.cloud import storage
 
+from bugmine import urlguard
+
 
 @dataclass(frozen=True)
 class CrawlResult:
@@ -37,6 +39,12 @@ def fetch_and_store(
     runs. Without it, versioning tracks how often we look rather than how often the software
     changed — and extraction cost follows.
     """
+    # Re-validated here, not only at write time. A URL that was permitted when the source was
+    # created can resolve somewhere else by the time it is fetched, which is the whole point of
+    # DNS rebinding. Terraform's egress deny is the third layer beneath both.
+    if rejection := urlguard.check(url):
+        raise ValueError(f"{rejection.code}: {rejection.message}")
+
     with httpx.Client(timeout=timeout, follow_redirects=False) as http:
         response = http.get(url, headers={"User-Agent": "BugMine/0.1 (+https://bugmine.dev)"})
         response.raise_for_status()

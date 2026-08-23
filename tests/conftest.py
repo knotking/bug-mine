@@ -97,3 +97,24 @@ def owner_engine() -> Iterator[Engine]:
     eng = make_engine(ADMIN_URL)
     yield eng
     eng.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _resolvable_test_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make .test hostnames resolve to a public address for the duration of a test.
+
+    The SSRF guard refuses unresolvable hosts, which is correct — but it means fixtures using
+    example.test would be rejected for the wrong reason and mask what the test is checking.
+    Only the resolver is stubbed; every other rule still applies, so a test that reaches for
+    localhost or a private range is still refused.
+    """
+    from bugmine import urlguard
+
+    real = urlguard._resolve
+
+    def fake(host: str) -> list[str]:
+        if host.endswith(".test"):
+            return ["93.184.216.34"]
+        return real(host)
+
+    monkeypatch.setattr(urlguard, "_resolve", fake)
