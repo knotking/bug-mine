@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from bugmine.catalog import IncomingBug
+from bugmine.catalog import IncomingBug, defect_identity
 from bugmine.models import BugType, SubjectDomain
 
 
@@ -165,9 +165,66 @@ def _sections(body: str) -> list[tuple[str, str]]:
     return out
 
 
+_ITEM_START = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+\S")
+_TAG_PREFIX = re.compile(r"^\s*(?:\*\*)?\s*(?:\[[^\]]{1,30}\]\s*)+(?:\*\*)?\s*")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z`\[])")
+
+# An item that opens by saying it fixes something is a fix, whatever vocabulary appears later
+# in the sentence. "Fixed issue where get_final_froms() would emit a deprecation warning" is a
+# repaired defect, not a deprecation the release introduces — but it contains the word, so a
+# marker alone classifies it backwards and files it against the wrong versions.
+_FIX_VERB = re.compile(
+    r"^\s*(?:[-*+]|\d+[.)])?\s*(?:\*\*)?\s*(?:\[[^\]]{1,30}\]\s*)*(?:\*\*)?\s*"
+    r"(?:fixed|fixes|fix|resolved|resolves|corrected|repaired)\b",
+    re.I,
+)
+
+
+def _items(text: str) -> list[str]:
+    """Split a section into one string per defect.
+
+    Release notes wrap. Matching line by line means a marker found on a continuation line
+    yields that line as the title, which is how "using self, which is deprecated as of pytest
+    9.1 and will be removed in" became a catalog record — a fragment starting mid-clause, and
+    attributed to the wrong project because the sentence it came from was about pytest.
+
+    A bullet and its indented continuations are one defect, so they are joined before matching.
+    Sections with no bullets fall back to blank-line-separated paragraphs.
+    """
+    lines = text.splitlines()
+    if not any(_ITEM_START.search(line) for line in lines):
+        paragraphs = re.split(r"\n\s*\n", text)
+        return [" ".join(p.split()) for p in paragraphs if p.strip()]
+
+    items: list[list[str]] = []
+    for line in lines:
+        if _ITEM_START.search(line):
+            items.append([line])
+        elif items and line.strip():
+            items[-1].append(line)
+        elif line.strip():
+            # Text before the first bullet: its own item rather than silently dropped.
+            items.append([line])
+    return [" ".join(" ".join(chunk).split()) for chunk in items]
+
+
+def _first_sentence(text: str) -> str:
+    """The defect statement, not the whole paragraph.
+
+    Reference links and trailing attribution are dropped; a very long single sentence is cut on
+    a word boundary so a title never ends mid-word.
+    """
+    text = re.sub(r"\s*References:.*$", "", text)
+    first = _SENTENCE_END.split(text, maxsplit=1)[0].strip()
+    if len(first) > 200:
+        first = first[:200].rsplit(" ", 1)[0] + "\u2026"
+    return first
+
+
 def _clean_title(line: str) -> str:
     """Strip list markers and decoration so the title reads as a statement, not a bullet."""
     line = re.sub(r"^\s*[-*+]\s*", "", line.strip())
+    line = _TAG_PREFIX.sub("", line)
     line = re.sub(r"^\s*\d+[.)]\s*", "", line)
     line = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", line)  # inline links -> their text
     # Underscores are left alone: in this domain `eval_type_backport` is an identifier far
@@ -209,9 +266,9 @@ def extract_github_releases(
             section_type, section_direction = _heading_class(heading)
             section_start = len(bugs)
             # The release title itself can announce a breaking change; treat it as unheaded text.
-            haystack_lines = (f"{name}\n{text}" if heading == "" else text).splitlines()
+            haystack = f"{name}\n{text}" if heading == "" else text
 
-            for line in haystack_lines:
+            for line in _items(haystack):
                 matched = next((m for m in MARKERS if m.pattern.search(line)), None)
                 # A bullet under a classified heading inherits that heading's type, so
                 # "## Breaking Changes" / "- removed the old API" records the removal even
@@ -223,6 +280,21 @@ def extract_github_releases(
                 else:
                     candidates = []
 
+                if _FIX_VERB.search(line):
+                    # Security and performance stay as they are: "fixed a performance
+                    # regression" is still a performance defect. A breaking change or
+                    # deprecation named inside a fix is describing what was repaired, not a
+                    # change this release makes, so it is recorded as a functional fix.
+                    candidates = [
+                        (
+                            bug_type
+                            if bug_type in {BugType.SECURITY, BugType.PERFORMANCE}
+                            else BugType.FUNCTIONAL,
+                            Direction.FIXED,
+                        )
+                        for bug_type, _ in candidates
+                    ]
+
                 for bug_type, direction in candidates:
                     if direction is None:
                         # Ambiguous marker with no heading to disambiguate it. Dropping this is
@@ -230,7 +302,7 @@ def extract_github_releases(
                         unresolved += 1
                         continue
 
-                    title = _clean_title(line) or name or tag or "release"
+                    title = _clean_title(_first_sentence(line)) or name or tag or "release"
                     key = (bug_type, direction, title.lower())
                     if key in seen:
                         continue
@@ -251,6 +323,7 @@ def extract_github_releases(
                                 "fixed_in": version if direction is Direction.FIXED else None,
                             },
                             title=title[:500],
+                            identity_key=defect_identity(title),
                             description=(body[:2000] or None),
                             evidence_url=release.get("html_url"),
                             raw_artifact_uri=artifact_uri,
@@ -292,6 +365,7 @@ def extract_github_releases(
                                 ),
                             },
                             title=title[:500],
+                            identity_key=defect_identity(title),
                             description=(body[:2000] or None),
                             evidence_url=release.get("html_url"),
                             raw_artifact_uri=artifact_uri,

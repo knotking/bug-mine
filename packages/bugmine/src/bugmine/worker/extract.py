@@ -19,7 +19,7 @@ from google import genai
 from google.cloud import storage
 from pydantic import TypeAdapter, ValidationError
 
-from bugmine.catalog import IncomingBug
+from bugmine.catalog import IncomingBug, defect_identity
 from bugmine.models import Applicability, BugType, SubjectDomain
 
 _applicability = TypeAdapter(Applicability)
@@ -182,6 +182,7 @@ def extract(
                 bug_type=bug_type,
                 applicability=applicability,
                 title=title[:500],
+                identity_key=defect_identity(title),
                 description=(raw.get("description") or None),
                 raw_artifact_uri=artifact_uri,
             )

@@ -200,3 +200,70 @@ class TestDirection:
             component_ref="lib",
         )
         assert len(r.bugs) == 2
+
+
+class TestWrappedProse:
+    """Release notes wrap, and a defect is a bullet plus its continuation lines.
+
+    Matching line by line produced titles that began mid-clause — "using self, which is
+    deprecated as of pytest 9.1 and will be removed in" was a real catalog record — and worse,
+    attributed the defect to pytest because the fragment came from a sentence about pytest.
+    """
+
+    WRAPPED = (
+        "## orm\n\n"
+        "-   **[orm] [bug]** Fixed issue where `get_final_froms()` would emit a deprecation\n"
+        "    warning when the statement made use of the PostgreSQL-specific construct,\n"
+        "    even though the caller had done nothing wrong.\n"
+        "    \n"
+        "    References: [#13439](https://example.invalid/13439)\n"
+    )
+
+    def test_a_wrapped_bullet_is_one_record(self) -> None:
+        r = extract_github_releases(
+            _feed({"tag_name": "2.0.52", "body": self.WRAPPED}), component_ref="sqlalchemy"
+        )
+        assert len(r.bugs) == 1
+
+    def test_the_title_is_a_whole_statement(self) -> None:
+        r = extract_github_releases(
+            _feed({"tag_name": "2.0.52", "body": self.WRAPPED}), component_ref="sqlalchemy"
+        )
+        title = r.bugs[0].title
+        assert title.startswith("Fixed issue where")
+        assert "References" not in title
+        assert not title.endswith("deprecation")  # no longer cut at the line break
+
+    def test_a_fix_mentioning_deprecation_is_not_a_deprecation(self) -> None:
+        """The word appears because the fix removed a spurious warning. Classifying it as a
+        deprecation this release introduces points the record at exactly the wrong versions."""
+        r = extract_github_releases(
+            _feed({"tag_name": "2.0.52", "body": self.WRAPPED}), component_ref="sqlalchemy"
+        )
+        bug = r.bugs[0]
+        assert bug.bug_type is BugType.FUNCTIONAL
+        assert bug.applicability["fixed_in"] == "2.0.52"
+        assert bug.applicability["introduced_in"] is None
+
+    def test_a_real_deprecation_still_records_as_introduced(self) -> None:
+        r = extract_github_releases(
+            _feed({
+                "tag_name": "2.1.0",
+                "body": "## orm\n\n-   The `Session.flush.objects` parameter is now deprecated.\n",
+            }),
+            component_ref="sqlalchemy",
+        )
+        assert r.bugs[0].bug_type is BugType.DEPRECATION
+        assert r.bugs[0].applicability["introduced_in"] == "2.1.0"
+
+    def test_distinct_defects_get_distinct_identities(self) -> None:
+        """Without this the write path falls back to matching on applicability, and every
+        defect in one release collapses into whichever was written first."""
+        r = extract_github_releases(
+            _feed({
+                "tag_name": "v2.14.0",
+                "body": "#### Changes\n* Drop support for Python 3.9\n* Remove support for x()\n",
+            }),
+            component_ref="pydantic",
+        )
+        assert len({b.identity_key for b in r.bugs}) == len(r.bugs) == 2

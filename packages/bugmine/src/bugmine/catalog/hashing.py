@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 
@@ -33,3 +34,21 @@ def content_hash(
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).digest()
+
+
+_IDENTITY_NOISE = re.compile(r"[^a-z0-9]+")
+
+
+def defect_identity(title: str) -> str:
+    """A stable identity for one defect within a component and bug type.
+
+    Without this, the write path falls back to matching on applicability alone, which was
+    adequate while extraction produced one record per release: the tuple (component, type,
+    affected range) really did identify the record. Emitting one record per *defect* breaks
+    that assumption — every defect in a release shares the release's version — so distinct
+    defects silently merge into whichever arrived first, and the rest are lost.
+
+    Normalised rather than hashed so an operator reading the column can tell what it refers to.
+    """
+    slug = _IDENTITY_NOISE.sub("-", title.strip().lower()).strip("-")
+    return slug[:280] or "untitled"
