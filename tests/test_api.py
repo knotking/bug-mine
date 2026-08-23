@@ -540,10 +540,12 @@ class TestKeyMinting:
         created = client.post(
             "/v1/tenant/api-keys", headers=headers, json={"name": "temp", "team_id": team_id}
         ).json()
-        assert client.get("/v1/whoami", headers={"X-BugMine-Key": created["secret"]}).status_code == 200
+        minted = {"X-BugMine-Key": created["secret"]}
+        assert client.get("/v1/whoami", headers=minted).status_code == 200
 
-        assert client.delete(f"/v1/tenant/api-keys/{created['id']}", headers=headers).status_code == 204
-        assert client.get("/v1/whoami", headers={"X-BugMine-Key": created["secret"]}).status_code == 401
+        revoked = client.delete(f"/v1/tenant/api-keys/{created['id']}", headers=headers)
+        assert revoked.status_code == 204
+        assert client.get("/v1/whoami", headers=minted).status_code == 401
 
 
 class TestWritesActuallyPersist:
