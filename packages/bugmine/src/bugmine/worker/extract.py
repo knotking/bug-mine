@@ -24,6 +24,8 @@ from bugmine.models import Applicability, BugType, SubjectDomain
 
 _applicability = TypeAdapter(Applicability)
 
+MODEL_CONTEXT_CHARS = 200_000
+
 RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -77,10 +79,19 @@ class ExtractionResult:
     worth alerting on rather than a number to ignore."""
 
 
-def read_artifact(uri: str, *, client: storage.Client, limit: int = 200_000) -> str:
+def read_artifact(uri: str, *, client: storage.Client) -> str:
+    """Read an artifact whole.
+
+    Deliberately not truncated here. Truncation is a *model context* concern, and applying it
+    at read time corrupts anything structured: a 1.2 MB releases feed cut at 200 KB is no
+    longer valid JSON, so the parser that should have handled it fails and the document falls
+    through to the model — which is both more expensive and, in this deployment, unavailable.
+
+    The model path truncates at the point of the call, where the limit actually applies.
+    """
     bucket_name, _, blob_name = uri.removeprefix("gs://").partition("/")
     blob = client.bucket(bucket_name).blob(blob_name)
-    return blob.download_as_text()[:limit]
+    return blob.download_as_text()
 
 
 def extract(
@@ -93,9 +104,10 @@ def extract(
     artifact_uri: str | None = None,
     default_component: str | None = None,
 ) -> ExtractionResult:
+    # Truncate here, not at read time — this is the only place a context limit applies.
     response = genai_client.models.generate_content(
         model=model,
-        contents=PROMPT.format(document=document),
+        contents=PROMPT.format(document=document[:MODEL_CONTEXT_CHARS]),
         config={
             "response_mime_type": "application/json",
             "response_schema": RESPONSE_SCHEMA,

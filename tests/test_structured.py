@@ -97,3 +97,22 @@ class TestVersions:
             component_ref="lib",
         )
         assert r.bugs[0].evidence_url == "https://gh.test/r/1"
+
+
+class TestLargeFeeds:
+    def test_a_large_feed_still_parses(self) -> None:
+        """Regression: a 1.2 MB releases feed was truncated at read time, became invalid JSON,
+        and silently fell through to the model — which is more expensive and, in the deployed
+        environment, unavailable. Truncation belongs at the model call, not at storage read.
+        """
+        big_body = "Breaking changes\n" + ("filler " * 2000)
+        feed = _feed(*[{"tag_name": f"v1.{i}.0", "body": big_body} for i in range(60)])
+        assert len(feed) > 500_000, "fixture must exceed the old truncation limit"
+        assert looks_like_github_releases(feed)
+        r = extract_github_releases(feed, component_ref="lib")
+        assert len(r.bugs) == 60
+
+    def test_truncated_json_is_not_mistaken_for_a_feed(self) -> None:
+        """If something does truncate upstream, detection must decline rather than misparse."""
+        feed = _feed({"body": "Breaking changes"})
+        assert not looks_like_github_releases(feed[: len(feed) // 2])
