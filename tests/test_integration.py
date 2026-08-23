@@ -164,3 +164,38 @@ class TestCatalogToApi:
                 results = [write(s, b, origin=RecordOrigin.CRAWLED) for b in parsed.bugs]
 
         assert all(r.deduplicated for r in results), "a repeat extraction created versions"
+
+
+class TestGitHubTokenScoping:
+    """The crawler fetches URLs a tenant chose, so the token must reach GitHub and nowhere else.
+
+    It carries no scopes and reads only public data, but a credential sent to a stranger is
+    disclosed regardless of what it can do.
+    """
+
+    def test_the_token_is_sent_to_github(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from bugmine.worker.crawl import _headers_for
+
+        monkeypatch.setenv("BUGMINE_GITHUB_TOKEN", "secret-token")
+        headers = _headers_for("https://api.github.com/repos/x/y/releases")
+        assert headers["Authorization"] == "Bearer secret-token"
+
+    def test_the_token_is_withheld_from_everyone_else(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from bugmine.worker.crawl import _headers_for
+
+        monkeypatch.setenv("BUGMINE_GITHUB_TOKEN", "secret-token")
+        for url in (
+            "https://example.invalid/releases",
+            # Ends with the string and is not GitHub: a suffix match would leak here.
+            "https://github.com.evil.test/repos",
+            "http://169.254.169.254/latest/meta-data/",
+        ):
+            assert "Authorization" not in _headers_for(url), url
+
+    def test_no_token_configured_sends_no_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from bugmine.worker.crawl import _headers_for
+
+        monkeypatch.delenv("BUGMINE_GITHUB_TOKEN", raising=False)
+        assert "Authorization" not in _headers_for("https://api.github.com/repos/x/y/releases")

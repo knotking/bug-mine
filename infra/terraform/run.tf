@@ -356,6 +356,17 @@ resource "google_cloud_run_v2_service" "crawl" {
 
       ports { container_port = 8080 }
 
+        env {
+          # From Secret Manager rather than a variable: this is a real credential, unlike the
+          # Firebase browser key, and must not sit in terraform state or a plan output.
+          name = "BUGMINE_GITHUB_TOKEN"
+          value_source {
+            secret_key_ref {
+              secret  = "bugmine-github-token"
+              version = "latest"
+            }
+          }
+        }
       env {
         name  = "BUGMINE_ARTIFACT_BUCKET"
         value = google_storage_bucket.artifacts.name

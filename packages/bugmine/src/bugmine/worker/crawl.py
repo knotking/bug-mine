@@ -10,7 +10,9 @@ This worker has network egress and **no model**. It never interprets what it fet
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 from google.cloud import storage
@@ -46,7 +48,7 @@ def fetch_and_store(
         raise ValueError(f"{rejection.code}: {rejection.message}")
 
     with httpx.Client(timeout=timeout, follow_redirects=False) as http:
-        response = http.get(url, headers={"User-Agent": "BugMine/0.1 (+https://bugmine.dev)"})
+        response = http.get(url, headers=_headers_for(url))
         response.raise_for_status()
         body = response.content
 
@@ -71,3 +73,25 @@ def fetch_and_store(
         bytes_fetched=len(body),
         deduplicated=False,
     )
+
+
+GITHUB_HOSTS = frozenset({"api.github.com", "github.com", "raw.githubusercontent.com"})
+"""Exact hosts, not a suffix match. `github.com.evil.test` ends with the string and is not
+GitHub, and this worker fetches URLs a tenant chose."""
+
+
+def _headers_for(url: str) -> dict[str, str]:
+    """Base headers, plus the GitHub token only when the host really is GitHub.
+
+    Attaching it unconditionally would hand the credential to every host the crawler is pointed
+    at — and it is pointed at arbitrary URLs by design. The token carries no scopes and reads
+    only public data, but a credential sent to a stranger is a credential disclosed regardless
+    of what it can do.
+    """
+    headers = {"User-Agent": "BugMine/0.1 (+https://bugmine.dev)"}
+    token = os.environ.get("BUGMINE_GITHUB_TOKEN", "").strip()
+    if token and urlparse(url).hostname in GITHUB_HOSTS:
+        headers["Authorization"] = f"Bearer {token}"
+        # Pins the response shape; GitHub's default has changed before.
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+    return headers

@@ -10,11 +10,10 @@
 
 locals {
   queues = {
-    # 1 dispatch/minute, 1 at a time. GitHub allows 60 unauthenticated requests an hour, and
-    # 115 sources at 5/second exhausted that in seconds — 39 consecutive crawls failed with 403
-    # and the sweep counted them as attempted, so those sources went quiet for a whole interval
-    # on the strength of work that never ran. Raise this once a token is configured.
-    crawl        = { rate = 0.016, concurrent = 1 }
+    # 3/second, 6 at a time. An authenticated token allows 5,000 requests an hour; the
+    # unauthenticated ceiling was 60, which one burst exhausted. The throttle that fixed that
+    # was slower than the sweep's own refill rate, so the queue filled faster than it drained.
+    crawl        = { rate = 3, concurrent = 6 }
     extract      = { rate = 5, concurrent = 10 }
     scan_fetch   = { rate = 10, concurrent = 20 }
     scan_analyze = { rate = 10, concurrent = 20 }
