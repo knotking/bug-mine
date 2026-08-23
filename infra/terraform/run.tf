@@ -128,6 +128,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = google_service_account.worker["dispatcher"].email
       }
       env {
+        name  = "BUGMINE_FIREBASE_PROJECT"
+        value = var.project_id
+      }
+      env {
         name = "BUGMINE_OPERATOR_TOKEN"
         value_source {
           secret_key_ref {

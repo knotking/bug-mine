@@ -19,6 +19,9 @@ locals {
     "iamcredentials.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "identitytoolkit.googleapis.com",
+    "apigateway.googleapis.com",
+    "servicecontrol.googleapis.com",
+    "servicemanagement.googleapis.com",
     # Already enabled on the project, listed so state is complete rather than partial.
     "logging.googleapis.com",
     "monitoring.googleapis.com",
