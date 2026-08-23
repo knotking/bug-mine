@@ -38,13 +38,32 @@ def test_every_referenced_id_exists() -> None:
     assert referenced <= declared, f"referenced but never declared: {sorted(referenced - declared)}"
 
 
-def test_the_theme_toggle_covers_all_three_states() -> None:
+def test_the_theme_picker_offers_all_three_states() -> None:
+    """The buttons are interpolated from a list, so the literal attribute never appears in the
+    source — assert on the list that generates them and on the labels each one needs."""
     source = _source()
-    assert set(re.findall(r'data-theme="(light|dark|system)"', source)) == {
-        "light",
-        "dark",
-        "system",
-    }
+    generated = re.search(r"\['light','dark','system'\]\.map", source)
+    assert generated, "theme picker is not generated from all three states"
+    for state in ("light", "dark", "system"):
+        assert f"{state}:" in source, f"no icon or label defined for {state}"
+
+
+def test_the_theme_picker_is_not_fixed_to_the_viewport() -> None:
+    """It was position:fixed in the top-right corner and covered whatever the page put there —
+    Sign out in the console header, then Sign in on the landing page. Reserving space for it was
+    a patch that had to be repeated for every new bar, and was forgotten the second time. In
+    flow, the corner cannot be occupied twice.
+    """
+    source = _source()
+    rule = re.search(r"\.themepick\{([^}]*)\}", source)
+    assert rule, "theme picker rule not found"
+    assert "position:fixed" not in rule.group(1)
+
+
+def test_the_theme_picker_sits_in_both_bars() -> None:
+    """Rendered per bar rather than once globally, so it has to appear in each."""
+    source = _source()
+    assert source.count("${themeControl()}") >= 2
 
 
 def test_dark_palette_is_defined_for_both_the_media_query_and_the_explicit_choice() -> None:
@@ -61,44 +80,6 @@ def test_dark_palette_is_defined_for_both_the_media_query_and_the_explicit_choic
     assert set(re.findall(r"(--[\w-]+):", media.group(1))) == set(
         re.findall(r"(--[\w-]+):", explicit.group(1))
     )
-
-
-def test_every_top_right_bar_reserves_room_for_the_theme_toggle() -> None:
-    """The toggle is position:fixed in the top-right corner with a high z-index, so any bar that
-    puts a control there must reserve the space. It covered Sign out in the console header, and
-    then covered Sign in on the landing page — the same bug twice, because the first fix pinned
-    only the one selector it happened to be about.
-    """
-    source = _source()
-    toggle = re.search(r"\.theme\{[^}]*right:(\d+)px", source)
-    assert toggle, "theme toggle position not found"
-    needed = int(toggle.group(1)) + 100  # three 28px buttons plus gaps and padding
-
-    for selector in ("header", ".topbar-inner"):
-        rule = re.search(re.escape(selector) + r"\{[^}]*padding(?:-right)?:([^;}]+)", source)
-        assert rule, f"{selector} has no padding rule"
-        # Right padding is the second value in "a b", the second of "a b c d", or the only one.
-        parts = rule.group(1).split()
-        right = parts[1] if len(parts) > 1 else parts[0]
-        pixels = [int(n) for n in re.findall(r"(\d+)px", right)]
-        assert pixels, f"{selector} right padding is not in px: {right}"
-        assert max(pixels) >= needed, (
-            f"{selector} reserves {max(pixels)}px, needs {needed}px to clear the toggle"
-        )
-
-
-def test_the_header_reserves_room_for_the_fixed_theme_toggle() -> None:
-    """The toggle is `position:fixed` at the top-right with a high z-index, and the header puts
-    the Sign out button in that same corner. Without a reservation the toggle paints over it:
-    the button is present, hit-testable only underneath, and invisible — which is exactly how it
-    was reported, as "no logout button", with nothing in the console to explain it.
-    """
-    source = _source()
-    toggle = re.search(r"\.theme\{[^}]*right:(\d+)px", source)
-    header = re.search(r"header\{[^}]*padding:\s*\d+px\s+(\d+)px", source)
-    assert toggle and header, "theme toggle or header padding not found"
-    # Toggle is three 28px buttons plus gaps and padding — roughly 100px wide.
-    assert int(header.group(1)) >= int(toggle.group(1)) + 100
 
 
 def test_every_settings_view_exists() -> None:
