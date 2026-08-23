@@ -68,6 +68,7 @@ still open. Everything else in `docs/` is the detailed version of a section in t
 | [`docs/architecture/metering.md`](docs/architecture/metering.md) | Inline cost ceilings, usage ledger, billing and product metrics |
 | [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
 | [`docs/motivation/`](docs/motivation/) | Researched problem evidence, trajectory, market sizing, and the solution mapped to both |
+| [`docs/plan/mvp.md`](docs/plan/mvp.md) | MVP plan — multi-tenancy, dual-trigger ingestion, scanning, client integrations, GCP mapping and costs |
 | [`docs/adr/`](docs/adr/) | Decision records — append-only |
 
 Requirement IDs are unique and stable across every document. They are **not** sequential within a
@@ -111,7 +112,8 @@ file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assi
   anything without it.
 - **No API contracts exist.** Appendix A of `bugmine.md` is a proposal; `api-design` has not run,
   so nothing is versioned or specified.
-- **No implementation.** Every surface is designed; none is built.
+- **No implementation.** Every surface is designed; none is built. The MVP plan is in
+  [`docs/plan/mvp.md`](docs/plan/mvp.md).
 - **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
   the scanner and is unanswered.
 
