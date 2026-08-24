@@ -50,6 +50,11 @@ ECOSYSTEM_DOMAIN = {
     "rubygems": SubjectDomain.REPO_LIBRARY,
     "nuget": SubjectDomain.REPO_LIBRARY,
     "packagist": SubjectDomain.REPO_LIBRARY,
+    # Container images. An OS package is the operating system rather than a library — it is
+    # what `apt` and `apk` ship, and the catalog holds its breaking changes under that domain.
+    "apk": SubjectDomain.OPERATING_SYSTEM,
+    "deb": SubjectDomain.OPERATING_SYSTEM,
+    "rpm": SubjectDomain.OPERATING_SYSTEM,
 }
 
 # Reachability is implemented per language. An ecosystem absent here is not "clean" — it is
