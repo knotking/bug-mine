@@ -669,7 +669,47 @@ class TestPublicStats:
         r = client.get("/v1/public/stats")
         assert r.status_code == 200
         body = r.json()
-        assert {"records", "components", "by_type", "beyond_security"} <= set(body)
+        assert {"records", "components", "sources", "by_type", "beyond_security"} <= set(body)
+
+    def test_stats_count_public_sources(self, client: TestClient, engine: Engine) -> None:
+        """The source count exists so the landing page can stop hardcoding it.
+
+        It had already drifted: the page claimed 429 sources and, three paragraphs later, 115
+        projects, while the registry held 313. A page that overstates its own coverage is worse
+        than one that says nothing, because the reader has no way to tell.
+        """
+        from bugmine.sweep import add_source
+
+        before = client.get("/v1/public/stats").json()["sources"]
+        with tenant_session(engine, None) as s:
+            add_source(
+                s,
+                url=f"https://example.test/{uuid.uuid4().hex[:8]}/releases",
+                subject_domain=SubjectDomain.REPO_LIBRARY,
+                component_ref="counted",
+                privacy_scope=PrivacyScope.PUBLIC,
+            )
+        assert client.get("/v1/public/stats").json()["sources"] == before + 1
+
+    def test_stats_exclude_tenant_sources(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """A tenant's own sources are private and are not crawled by the system sweep either,
+        so counting them would overstate coverage on both axes at once."""
+        from bugmine.sweep import add_source
+
+        tenant, _ = two_tenants
+        before = client.get("/v1/public/stats").json()["sources"]
+        with tenant_session(engine, tenant) as s:
+            add_source(
+                s,
+                url=f"https://example.test/{uuid.uuid4().hex[:8]}/private",
+                subject_domain=SubjectDomain.REPO_LIBRARY,
+                component_ref="private-source",
+                privacy_scope=PrivacyScope.TENANT,
+                tenant_id=tenant,
+            )
+        assert client.get("/v1/public/stats").json()["sources"] == before
 
     def test_stats_exclude_tenant_records(
         self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]

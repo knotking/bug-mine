@@ -146,9 +146,19 @@ def public_stats(session: Session = Depends(anonymous_session)) -> dict[str, obj
             select(func.count(func.distinct(BugRecord.component_id))).where(*scope)
         ).scalar_one()
     )
+    # Exposed so the landing page can state how many sources it reads instead of hardcoding
+    # it. Two hardcoded figures on that page had already drifted — it claimed 429 sources and
+    # 115 projects while the registry held 313 — and a page that overstates its own coverage
+    # is worse than one that says nothing, because nobody can tell it is doing so.
+    sources = int(
+        session.execute(
+            select(func.count(Source.id)).where(Source.privacy_scope == PrivacyScope.PUBLIC)
+        ).scalar_one()
+    )
     return {
         "records": records,
         "components": components,
+        "sources": sources,
         "by_type": {k.value: int(v) for k, v in by_type.items()},
         # The split that carries the argument: what CVE-shaped tooling does not report.
         "beyond_security": records - int(by_type.get(BugType.SECURITY, 0)),

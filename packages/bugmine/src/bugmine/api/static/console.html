@@ -715,6 +715,77 @@ function signin(msg){
           rather than a claim — the category is defined by a 92% error rate, so asserting
           accuracy would be worth nothing.</p>
 
+        <h2 class="sec" style="margin-top:64px">How big the problem is</h2>
+        <p class="secsub">Not the market for tools like this, which is small and crowded. The
+          cost of the thing the tools exist to prevent, which is neither.</p>
+
+        <div class="stat-line">
+          <div class="s"><div class="n">$2.41T</div>
+            <div class="d">annual cost of poor software quality in the US alone — CISQ, 2022</div></div>
+          <div class="s"><div class="n">$1.52T</div>
+            <div class="d">of that total is accumulated technical debt: defects already shipped
+              and not yet paid for</div></div>
+          <div class="s"><div class="n">$300B</div>
+            <div class="d">global output lost each year to developer inefficiency — Stripe, 2018</div></div>
+          <div class="s"><div class="n">42%</div>
+            <div class="d">of a developer's week goes to maintenance and debugging rather than
+              building — same study</div></div>
+        </div>
+
+        <p class="secsub" style="margin-top:20px">Software-security tooling captures a low
+          single-digit percentage of that: application-security and composition testing together
+          are usually put in the region of $10&ndash;15&nbsp;billion a year, and estimates vary
+          enough that the range matters more than any single figure. The gap between what the
+          defects cost and what is spent finding them is the actual opportunity — and most of
+          that spend goes to the security slice, while security is a minority of what breaks.
+          Of the <b id="m-rec">24,363</b> records we hold, <b><span id="m-bey">83</span>% have no CVE at all</b>.</p>
+
+        <h2 class="sec" style="margin-top:64px">And what happens when the software is written
+          by models</h2>
+        <p class="secsub">This is a projection, so treat it as one. The measured inputs are
+          below; the conclusion drawn from them is an argument, not a number.</p>
+
+        <div class="args">
+          <div class="arg">
+            <h3>Adoption is close to universal, fast</h3>
+            <span class="big">14% → 90%</span>
+            <span class="cap">share of enterprise software engineers using AI code assistants,
+              2024 to a projected 2028 — Gartner.</span>
+            <p>At Google, more than a quarter of new code was already model-generated as of late
+              2024. Whatever the exact figure now, the direction has not been in doubt for two
+              years.</p>
+          </div>
+
+          <div class="arg">
+            <h3>Verification scales with code, not with headcount</h3>
+            <p>Every tool that bounds this problem today is bounded by a person: a reviewer
+              reading a diff, an engineer deciding whether an advisory applies. Generation is
+              no longer bounded by a person. So the quantity needing verification grows on one
+              curve while the capacity to verify it grows on a much flatter one.</p>
+            <p>That gap is the market. It widens as a function of how much code gets written,
+              which is precisely the quantity that is being decoupled from hiring.</p>
+          </div>
+
+          <div class="arg">
+            <h3>The dependency being consumed has no version</h3>
+            <p>A model is a dependency that ships no release notes and cannot be pinned. The
+              existing $10&ndash;15B of tooling assumes versioned artifacts and explicit
+              upgrades; none of that machinery has anything to grip when the thing that changed
+              was weights behind a stable endpoint name.</p>
+            <p>Whoever holds a versioned record of model behaviour holds the only artifact that
+              makes that dependency reviewable at all.</p>
+          </div>
+
+          <div class="arg">
+            <h3>What would make this wrong</h3>
+            <p>If models get good enough that generated code carries a lower defect rate than
+              human code — plausible, and partly already true for some classes — then volume
+              stops implying proportional risk and this argument weakens considerably.</p>
+            <p>It does not disappear. A correct call into a dependency that changed underneath
+              you is still broken, and no amount of generation quality addresses that.</p>
+          </div>
+        </div>
+
         <h2 class="sec" style="margin-top:64px">And the gap is widening, not closing</h2>
         <p class="secsub">Every dependency tool rests on one assumption: dependencies are
           versioned, and change is an explicit act. You pin, you review a diff, you upgrade
@@ -804,9 +875,13 @@ function signin(msg){
     <section id="how">
       <div class="wrap center">
         <div class="kicker">How it works</div>
-        <h2 class="sec">Four stages. The third is the one others skip.</h2>
-        <p class="secsub">Which is why a BugMine report is shorter than a dependency
-          scanner's, and why what is left is worth reading.</p>
+        <h2 class="sec">Four origins in. One question out: does this reach your code?</h2>
+        <p class="secsub">Read the diagram left to right. On the left, four independent ways a
+          defect gets discovered — three of them read what someone already wrote down, and one
+          goes looking. In the middle, a single catalog where every record says which release
+          <em>introduced</em> the problem and which one <em>fixed</em> it. On the right, your
+          repository, where the catalog is narrowed against code you actually call. What
+          survives that narrowing is the report.</p>
 
         <div class="arch">
           <svg viewBox="0 0 880 400" role="img"
@@ -829,7 +904,7 @@ function signin(msg){
 
             <rect class="box" x="24" y="42" width="180" height="46" rx="10"/>
             <text x="38" y="62" class="lbl">Crawl</text>
-            <text x="38" y="78" class="sub-lbl">429 sources · release notes</text>
+            <text x="38" y="78" class="sub-lbl" id="d-src">313 sources · release notes</text>
 
             <rect class="box" x="24" y="98" width="180" height="46" rx="10"/>
             <text x="38" y="118" class="lbl">OSV</text>
@@ -841,7 +916,7 @@ function signin(msg){
 
             <rect class="box" x="24" y="210" width="180" height="46" rx="10"/>
             <text x="38" y="230" class="lbl">Evals</text>
-            <text x="38" y="246" class="sub-lbl">probes — the only LLM origin</text>
+            <text x="38" y="246" class="sub-lbl">probes · planned, not yet live</text>
 
             <path class="flow" d="M204 65 h44 q10 0 10 10 v90"/>
             <path class="flow" d="M204 121 h44 q10 0 10 10 v34"/>
@@ -851,8 +926,8 @@ function signin(msg){
             <rect x="268" y="120" width="182" height="116" rx="13" fill="url(#cat)"
                   stroke="var(--accent)"/>
             <text x="288" y="146" class="lbl">Catalog</text>
-            <text x="288" y="166" class="sub-lbl">23,000+ records</text>
-            <text x="288" y="184" class="sub-lbl">85% beyond CVEs</text>
+            <text x="288" y="166" class="sub-lbl" id="d-rec">24,000+ records</text>
+            <text x="288" y="184" class="sub-lbl" id="d-bey">83% beyond CVEs</text>
             <text x="288" y="206" class="tiny">every record cited</text>
             <text x="288" y="224" class="tiny">direction: introduced vs fixed</text>
 
@@ -913,20 +988,63 @@ function signin(msg){
         </div>
 
         <div class="steps">
-          <div class="step"><div class="i">1</div><b>Crawl</b>
-            <p>Release notes and changelogs from 115 projects. A worker with network access and
-              no model — the pages it fetches are written by whoever controls them.</p></div>
-          <div class="step"><div class="i">2</div><b>Extract</b>
-            <p>Structured feeds are parsed deterministically; the version is declared, so a
-              parser beats a model. Every record states whether the release <em>introduced</em>
-              the defect or <em>fixed</em> it.</p></div>
-          <div class="step"><div class="i">3</div><b>Reach</b>
-            <p>A known defect in a package you never call is suppressed, not reported. Imports
-              and symbols resolve through aliases; anything undetermined is reported with lower
-              confidence rather than hidden.</p></div>
-          <div class="step"><div class="i">4</div><b>Cite</b>
-            <p>Every finding names the record grounding it, and components with no coverage are
-              listed as not covered — an empty result reads as healthy and is not.</p></div>
+          <div class="step"><div class="i">1</div><b>Discover — four origins</b>
+            <p>The left column of the diagram. <b>Crawl</b> reads release notes and changelogs
+              from <span id="s-src">313</span> sources; it has network access and no model, because those pages are
+              written by whoever controls them. <b>OSV</b> contributes advisories whose affected
+              ranges are already declared, so direction is read rather than guessed. <b>Scans</b>
+              feed back what customers actually hit. <b>Evals</b> are the only origin that goes
+              looking rather than reading.</p></div>
+          <div class="step"><div class="i">2</div><b>Catalog — one record per defect</b>
+            <p>The centre box. Records are content-hashed and deduplicated by defect, not by
+              release, so one changelog entry described in three places stays one record.
+              Every record carries a <em>direction</em> — introduced or fixed — because
+              "affected by 1.3" and "fixed in 1.3" are opposite facts that read almost
+              identically in prose. Applicability is a tagged union rather than a version
+              range: libraries have versions, phones have build numbers, and a hosted model
+              has neither.</p></div>
+          <div class="step"><div class="i">3</div><b>Reach — the stage others skip</b>
+            <p>The right zone. Your lockfile resolves locally and your imports and call sites
+              are parsed for Python, JavaScript, JVM and Go, following aliases and re-exports.
+              A defect in a package you never call is suppressed and counted, not reported.
+              Suppression needs a <em>confirmed</em> negative: anything the parser cannot settle
+              stays in the report at lower confidence, because a missed defect costs more than
+              a dismissed one. Nothing but package and symbol names leaves your machine.</p></div>
+          <div class="step"><div class="i">4</div><b>Cite — and name what is missing</b>
+            <p>Every finding names the catalog record and revision grounding it; a finding
+              without one is a bug in us, not a judgement call. Components the catalog has
+              never seen are listed as <em>not covered</em> rather than omitted — an empty
+              report and an unexamined dependency look identical otherwise, and only one of
+              them is good news.</p></div>
+        </div>
+
+        <div class="against" style="margin-top:44px">
+          <h3>Evals — the origin that finds bugs instead of reading about them</h3>
+          <p>Three of the four origins are downstream of someone else's writing. If nobody
+            published a changelog entry, nothing arrives. Evals are how a defect enters the
+            catalog when no such entry will ever exist.</p>
+          <ul>
+            <li><b>Why LLMs need this and nothing else provides it.</b> A hosted model has no
+              version to pin and ships no release notes. Its behaviour changes under a fixed
+              endpoint name, so there is no artifact for a lockfile to hold or a diff to show.
+              The only way to know a model regressed is to have measured it before and to
+              measure it again.</li>
+            <li><b>Not only models.</b> The same probe-and-compare method applies to anything
+              whose behaviour can be exercised: a database's handling of an edge-case query, an
+              API's response to a malformed request, a runtime's behaviour across a version
+              bump. Anywhere behaviour can be tested, a defect can be found rather than
+              awaited.</li>
+            <li><b>Corroboration is by rate, not by repetition.</b> Probabilistic systems fail
+              intermittently, so "it failed twice in a row" proves nothing. A result is
+              promoted when the Wilson confidence interval on its failure rate clears the
+              tolerated floor, and refuted when the interval falls entirely below it —
+              otherwise it stays undetermined and says so. That maths is implemented and
+              tested.</li>
+          </ul>
+          <p><b>Status, plainly:</b> the corroboration logic is built; the scheduler that runs
+            probes on a cadence is not. Evals appear in the diagram because they are the design,
+            not because they are populating the catalog today. Everything else in it is
+            running.</p>
         </div>
       </div>
     </section>
@@ -1049,6 +1167,19 @@ GET  /v1/scans/{id}/findings</pre></div>
       [n(st.records),'records'],[n(st.components),'components'],
       [n(st.beyond_security),'beyond CVEs'],
     ].map(([v,k])=>`<div class="fig"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+
+    // Every other figure quoted on this page comes from the same response. Two of them used to
+    // be typed into the markup and had already drifted — the page claimed 429 sources and 115
+    // projects against a registry holding 313. Overstating your own coverage is worse than
+    // staying quiet about it, because the reader has no way to notice.
+    const pct = st.records ? Math.round(st.beyond_security / st.records * 100) : 0;
+    const set = (id, text) => { const e = document.getElementById(id); if(e) e.textContent = text; };
+    set('d-src', `${n(st.sources)} sources · release notes`);
+    set('d-rec', `${n(st.records)} records`);
+    set('d-bey', `${pct}% beyond CVEs`);
+    set('s-src', n(st.sources));
+    set('m-rec', n(st.records));
+    set('m-bey', String(pct));
   }).catch(()=>{});
 
   fetch('/v1/public/components?limit=60').then(r=>r.json()).then(rows=>{
