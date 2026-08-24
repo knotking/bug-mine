@@ -331,6 +331,37 @@ def source_prune(args: argparse.Namespace) -> int:
     return 0
 
 
+def schema_check(args: argparse.Namespace) -> int:
+    """Compare the database's alembic revision against the newest migration on disk.
+
+    A migrate job that runs the *previous* image finds nothing to apply and reports success, so
+    "the job completed" does not mean "the schema is current". That happened twice: once leaving
+    Settings returning 500 on a missing quota table, once leaving /v1/scans returning 500 on a
+    missing column. Both looked like a green deploy.
+    """
+    from pathlib import Path
+
+    from sqlalchemy import text
+
+    versions = Path(__file__).resolve().parents[4] / "migrations" / "versions"
+    on_disk = sorted(
+        f.stem.split("_")[0] for f in versions.glob("[0-9]*.py") if f.stem[0].isdigit()
+    )
+    latest = on_disk[-1] if on_disk else None
+
+    with tenant_session(_engine(), None, commit=False) as s:
+        row = s.execute(text("SELECT version_num FROM alembic_version")).first()
+    current = row[0] if row else None
+
+    print(f"  database: {current}")
+    print(f"  on disk:  {latest}")
+    if current != latest:
+        print("  OUT OF DATE — run the migrate job against the image you just deployed.")
+        return 1
+    print("  schema is current")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bugmine-admin", description="BugMine operator tools.")
     sub = parser.add_subparsers(dest="group", required=True)
@@ -378,6 +409,10 @@ def main(argv: list[str] | None = None) -> int:
     sp = src.add_parser("prune", help="Remove duplicate registrations of the same url")
     sp.add_argument("--tenant", help="Also prune this tenant's own sources (slug)")
     sp.set_defaults(func=source_prune)
+
+    sch = sub.add_parser("schema").add_subparsers(dest="cmd", required=True)
+    sc = sch.add_parser("check", help="Is the database schema current?")
+    sc.set_defaults(func=schema_check)
 
     rec = sub.add_parser("record").add_subparsers(dest="cmd", required=True)
     rl = rec.add_parser("list", help="Catalog records, including retracted ones")

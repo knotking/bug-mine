@@ -59,6 +59,13 @@ write to the registry, and that is deliberate — see [Why the build is awkward]
 ```bash
 terraform apply -var=image_tag=vN
 gcloud run jobs execute bugmine-migrate --region=us-central1 --project=bugmine-dev --wait
+
+# Then assert the schema is actually current. A migrate job running the *previous* image finds
+# nothing to apply and reports success, so a completed job does not mean a migrated database.
+# This has shipped two production 500s — a missing quota table, then a missing scan column —
+# both behind a green apply and a green migrate.
+gcloud run jobs execute bugmine-admin --region=us-central1 --project=bugmine-dev --wait \
+  --args="schema,check"   # must print "schema is current"
 ```
 
 **Check the result explicitly — `--wait` returning is not success:**
