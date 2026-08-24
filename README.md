@@ -1,135 +1,186 @@
+<div align="center">
+
 # BugMine
 
-A holistic bug-intelligence system: a continuously-crawled, versioned catalog of known bugs and
-live outages across an entire software stack — functional, performance, system-level, and
-dependency — plus surfaces that tell a team which of them actually affect it.
+**Every dependency breaks. Know which ones break you.**
 
-## The problem
+A holistic catalog of known defects across an entire software stack — breaking changes,
+deprecations, regressions, performance and security — and a scanner that reports only the ones
+your code actually reaches.
 
-Existing tooling is the wrong shape for how software actually breaks. A peer-reviewed study of
-2,414 repositories measured a **92.0% false positive rate** in vulnerability scanners, caused
-primarily by flagging defects in code that is never reached. The larger problem is what they never
-report at all: **67%** of Maven packages have violated semantic versioning, **41.58%** of
-client-impacting breaking changes arrive in non-major upgrades, and **70%** of vulnerable
-dependencies require an update that breaks source code — so the tool that files the ticket is
-silent about what fixing it costs. Meanwhile hosted LLMs have stopped being versioned dependencies
-at all: GPT-4's code-execution success rate fell from **52% to 10% in three months with no version
-change**.
+[**Live**](https://bugmine-5j2s4vtc.uc.gateway.dev/) ·
+[Motivation](docs/motivation/) ·
+[Requirements](docs/requirements/) ·
+[Architecture](docs/architecture/) ·
+[Decisions](docs/adr/)
 
-Full evidence and sources in [`docs/motivation/`](docs/motivation/).
+</div>
 
-## Three surfaces on one catalog
+---
 
-| Surface | Question it answers | Status |
+## Why
+
+Dependency scanners are the wrong shape for how software actually breaks.
+
+| Measured | |
+| ---: | --- |
+| **92%** | false-positive rate across 2,414 repositories — defects flagged in code that never reaches them |
+| **61.9%** | of those false alarms removed by reachability analysis alone |
+| **70%** | of vulnerable dependencies need an upgrade that may break source compatibility |
+| **67%** | of Maven packages have violated semantic versioning |
+| **52% → 10%** | GPT-4's code-execution success rate over three months, **with no version change** |
+
+The last row is the one nothing else catalogs. Hosted models change behaviour under a stable
+identifier with no artifact recording it — so there is nothing for a lockfile to pin or a diff to
+show. Sources in [`docs/motivation/`](docs/motivation/).
+
+## What it does differently
+
+**Reports what reaches you.** Scanning [`python-poetry/poetry`](https://github.com/python-poetry/poetry):
+
+```
+80 dependencies · 224 catalog matches
+├── 168 suppressed  — the code never calls them
+├──  56 reported    — each citing the record that grounds it
+└──  76 uncovered   — stated out loud, because silence reads as health
+```
+
+**75% suppressed.** That is our own measurement, not the borrowed 61.9%.
+
+**Catalogs what CVEs miss.** Of 24,286 records, **20,131 have no CVE** — deprecations and
+breaking changes are the bulk of what actually breaks builds.
+
+| | records |
+| --- | ---: |
+| deprecation | 9,835 |
+| breaking change | 8,316 |
+| security | 4,155 |
+| functional | 1,883 |
+| performance | 97 |
+
+**Says when it does not know.** An uncovered component, an unresolvable manifest and an
+undetermined reachability verdict are three different answers, and none of them is "clean".
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph origins["Discovery — four origins"]
+        C["Crawl<br/><sub>429 sources</sub>"]
+        O["OSV<br/><sub>advisories</sub>"]
+        S["Scans<br/><sub>what customers hit</sub>"]
+        E["Evals<br/><sub>the only LLM origin</sub>"]
+    end
+
+    CAT[("Catalog<br/><b>24,286 records</b><br/><sub>every one cited</sub>")]
+
+    subgraph yours["Your code — only names leave it"]
+        INV["Inventory<br/><sub>lockfile, resolved locally</sub>"]
+        R{"Reachability<br/><sub>py · js · jvm · go</sub>"}
+    end
+
+    C & O & S & E --> CAT
+    CAT --> R
+    INV --> R
+    R -->|"never called"| X["168 suppressed"]
+    R -->|"reaches your code"| F["56 reported<br/><sub>with citations</sub>"]
+    F --> OUT["Console · MCP · GitHub · CLI · Advisor"]
+
+    style CAT fill:#4338ca22,stroke:#4338ca
+    style R fill:#4338ca22,stroke:#4338ca
+    style X stroke-dasharray: 4 4
+```
+
+The third stage is the one other tools skip, and the reason a BugMine report is shorter than a
+dependency scanner's.
+
+## Surfaces
+
+| | Question it answers | State |
 | --- | --- | --- |
-| **Search / subscribe** | What is known about this software? | Requirements + architecture |
-| **Scan** | What is wrong with the code I have? | Requirements only |
-| **Advise** | Given what I propose to build, what will I run into? | Requirements + architecture + data model |
-| **Evals** | What is wrong with software nobody has reported on yet? | Requirements only |
+| **Search** | What is known about this software? | live, public, no account |
+| **Scan** | What is wrong with the code I have? | live — measured at 75% suppression |
+| **Advise** | Given what I plan to build, what will I run into? | live |
+| **Evals** | What is wrong that nobody has reported? | built; no scheduler yet |
 
-The advisor is being built first: it is the sharpest differentiator, the thinnest build on top of
-the catalog, and the cheapest way to find out whether the catalog produces advice anyone values.
+## Quickstart
 
-Bugs enter the catalog from **three origins** with different capabilities — crawling (broad,
-cheap, but structurally always behind what has been published), scanning customer repos (knows
-what actually breaks real systems, and improves as the customer base grows), and evals (the only
-origin that can find a defect nobody has reported). For LLM models, where no vendor publishes a
-defect tracker and behavior shifts under a stable identifier, evals are the *only* viable origin.
-See [`docs/requirements/discovery.md`](docs/requirements/discovery.md).
+Search the catalog with no account at all:
 
-## Status
+```bash
+curl 'https://bugmine-5j2s4vtc.uc.gateway.dev/v1/public/bugs/search?q=sqlalchemy&limit=5'
+curl 'https://bugmine-5j2s4vtc.uc.gateway.dev/v1/public/stats'
+```
 
-**Design phase — no implementation yet.** This repository currently contains design documents and
-the skills used to produce them. Nothing is deployed and no language or framework is committed to.
+In Cursor or Claude Code, so an agent can ask on your behalf while you work:
 
-## Documentation
+```json
+{"mcpServers": {"bugmine": {
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/knotking/bug-mine#subdirectory=packages/bugmine",
+           "bugmine-mcp"],
+  "env": {"BUGMINE_URL": "https://bugmine-5j2s4vtc.uc.gateway.dev",
+          "BUGMINE_API_KEY": "bmk_…"}}}}
+```
 
-All docs live in [`docs/`](docs/). See [`docs/README.md`](docs/README.md) for the layout and
-conventions.
+From the command line — your lockfile is resolved locally and only names and versions are sent:
 
-**Start here:** [`docs/motivation/blog.md`](docs/motivation/blog.md) — the whole thing in one
-document: why this should exist (with cited research), what it is, how it is designed, and what is
-still open. Everything else in `docs/` is the detailed version of a section in that file.
+```bash
+export BUGMINE_URL=https://bugmine-5j2s4vtc.uc.gateway.dev
+export BUGMINE_API_KEY=bmk_…
+bugmine check
+```
 
-| Document | What it covers |
+## Working on it
+
+```bash
+uv sync
+docker run -d --name bugmine-test-pg -e POSTGRES_PASSWORD=dev \
+  -e POSTGRES_DB=bugmine_test -p 55432:5432 postgres:16
+uv run pytest          # 382 tests, ~5s
+uv run ruff check .
+```
+
+Deployment — including teardown, since the environment is meant to be destroyable and
+rebuildable — is in [`.claude/skills/deploy/`](.claude/skills/deploy/SKILL.md).
+
+## Layout
+
+| Path | |
 | --- | --- |
-| [`docs/requirements/bugmine.md`](docs/requirements/bugmine.md) | FR-1 – FR-20, FR-36 – FR-37; API and worker proposals |
-| [`docs/requirements/advisor.md`](docs/requirements/advisor.md) | FR-21 – FR-35 — the advisor surface |
-| [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) | NFR-1 – NFR-40 — performance, scale, availability, security, operability |
-| [`docs/requirements/bug-taxonomy.md`](docs/requirements/bug-taxonomy.md) | FR-38 – FR-39 — what bugs are covered, subject × type matrix, concrete examples |
-| [`docs/requirements/discovery.md`](docs/requirements/discovery.md) | FR-40 – FR-56 — three discovery origins, the scan feedback loop, and evals |
-| [`docs/requirements/feedback.md`](docs/requirements/feedback.md) | FR-57 – FR-63 — finding disposition, suppression, precision as a measured metric |
-| [`docs/requirements/record-lifecycle.md`](docs/requirements/record-lifecycle.md) | FR-64 – FR-71 — record states, retraction, bug identity and merging |
-| [`docs/architecture/ingestion.md`](docs/architecture/ingestion.md) | Crawl → extract → index, and the shared job substrate |
-| [`docs/architecture/advisor.md`](docs/architecture/advisor.md) | Intake → profile → sufficiency → retrieve → reason → report |
-| [`docs/architecture/auth.md`](docs/architecture/auth.md) | Firebase for people, API Gateway for programs, and how both resolve to one principal |
-| [`docs/architecture/scanner.md`](docs/architecture/scanner.md) | Two engines, dependency graph, reachability, secret redaction at the sandbox boundary |
-| [`docs/architecture/evals.md`](docs/architecture/evals.md) | Eval results as measurements with distributions; regression detection |
-| [`docs/architecture/promotion.md`](docs/architecture/promotion.md) | Candidate → corroboration → sanitization → shared catalog |
-| [`docs/architecture/metering.md`](docs/architecture/metering.md) | Inline cost ceilings, usage ledger, billing and product metrics |
-| [`docs/data-model/stack-profile.md`](docs/data-model/stack-profile.md) | The advisor IR, catalog record shape, version matching |
-| [`docs/motivation/`](docs/motivation/) | Researched problem evidence, trajectory, market sizing, and the solution mapped to both |
-| [`docs/plan/mvp.md`](docs/plan/mvp.md) | MVP plan — multi-tenancy, dual-trigger ingestion, scanning, client integrations, GCP mapping and costs |
-| [`docs/plan/token-accounting.md`](docs/plan/token-accounting.md) | LLM token attribution and ceiling enforcement across system, tenant, team and user |
-| [`docs/plan/mvp-sequence.md`](docs/plan/mvp-sequence.md) | Implementation order — eleven milestones, dependencies, and the test that gates each |
-| [`docs/plan/advisor.md`](docs/plan/advisor.md) | Advisor implementation — six stages, what is already built, and the decision that blocks stage 4 |
-| [`docs/api/`](docs/api/) | API contract — OpenAPI 3.1 spec and the decisions behind it |
-| [`docs/adr/`](docs/adr/) | Decision records — append-only |
+| `packages/bugmine/` | the system — 9,100 lines |
+| `packages/bugmine/src/bugmine/reach/` | reachability, one module per language |
+| `packages/bugmine/src/bugmine/evals/` | probes and rate-based corroboration |
+| `packages/bugmine/src/bugmine/worker/` | crawl, extract, scan, OSV |
+| `tests/` | 5,200 lines, 382 tests |
+| `infra/terraform/` | GCP: Cloud Run, Cloud SQL, Cloud Tasks, API Gateway |
+| `docs/` | requirements, architecture, ADRs, motivation |
 
-Requirement IDs are unique and stable across every document. They are **not** sequential within a
-file: FR-36 and FR-37 were added to `bugmine.md` after FR-21 – FR-35 were assigned in
-`advisor.md`.
+## Decisions worth reading
 
-## Decisions made so far
+The reasoning that shaped the system, rather than the code that resulted:
 
-- [ADR-0001](docs/adr/0001-advisor-input-normalization.md) — all four advisor input types
-  normalize into one Stack Profile before anything downstream runs.
-- [ADR-0002](docs/adr/0002-grounding-and-provenance.md) — findings must cite catalog records, and
-  this is enforced by schema and set membership rather than by prompting.
-- [ADR-0003](docs/adr/0003-catalog-seeding-strategy.md) — hand-seed a narrow catalog slice across
-  all seven subject domains before building crawlers.
-- [ADR-0004](docs/adr/0004-scan-derived-catalog-entries.md) — bugs found while scanning customer
-  repos feed the shared catalog, but only as candidates until corroborated across unaffiliated
-  tenants; own-code findings never do.
-- [ADR-0005](docs/adr/0005-untrusted-content-in-model-pipelines.md) — crawled pages and
-  third-party code are untrusted input to models; the blast radius of a successful prompt
-  injection is engineered rather than its probability.
-- [ADR-0006](docs/adr/0006-reachability-analysis.md) — **Proposed, not accepted.** Narrow
-  candidates with cheap static symbol analysis, then judge the residue with a model.
-- [ADR-0007](docs/adr/0007-firebase-auth-and-api-gateway.md) — Firebase owns passwords, API
-  Gateway owns API keys; the gateway also makes the deployment publicly reachable, which the
-  org policy otherwise prevents.
+- [**Grounding and provenance**](docs/adr/0002-grounding-and-provenance.md) — why every finding
+  cites a record, enforced structurally rather than by prompt
+- [**Reachability**](docs/adr/0006-reachability-analysis.md) — narrow statically, judge with a
+  model; the largest cost fork in the system
+- [**Untrusted content in model pipelines**](docs/adr/0005-untrusted-content-in-model-pipelines.md)
+  — why the worker with network access has no model, and the one with a model has no network
+- [**Scan-derived entries**](docs/adr/0004-scan-derived-catalog-entries.md) — corroboration
+  before one customer's observation becomes everyone's
 
-## Open
+## What is not built
 
-- **Non-functional requirements are drafted but unconfirmed.** Every number in
-  [`docs/requirements/non-functional.md`](docs/requirements/non-functional.md) is proposed, not
-  measured or committed. They unblock most of `ingestion.md`'s open decisions once agreed.
-- **Own-code analysis** (FR-36, FR-37) is unscoped — a different engine from catalog lookup.
-- **The value of *k*** in the corroboration threshold (FR-44) is unset: too low leaks tenant
-  information, too high starves the catalog when it is thinnest.
-- **Probabilistic eval failures** have no corroboration model yet — LLM defects often reproduce at
-  a *rate* rather than reliably, which a boolean threshold would reject.
-- **Bug identity across origins** (FR-70) is unresolved — the same defect is described in
-  different vocabularies by a changelog, a scan, and an eval, and cross-origin corroboration
-  depends on matching them.
-- **Reachability is undecided.** [ADR-0006](docs/adr/0006-reachability-analysis.md) is
-  `Proposed`, not accepted — it is the largest cost fork in the system, and the scanner design
-  is shaped around its outcome.
-- **Bug identity across origins** (FR-70) is unsolved, and the promotion pipeline cannot corroborate
-  anything without it.
-- **No API contracts exist.** Appendix A of `bugmine.md` is a proposal; `api-design` has not run,
-  so nothing is versioned or specified.
-- **No implementation.** Every surface is designed; none is built. The MVP plan is in
-  [`docs/plan/mvp.md`](docs/plan/mvp.md).
-- **Reachability** — static call-graph analysis vs LLM-judged usage — is the largest cost fork in
-  the scanner and is unanswered.
+Stated because a README that only lists what works is a sales page:
 
-## Development
+- **GitHub App** is written and tested but unregistered — no App ID, so no PR has ever been checked
+- **Evals have no scheduler.** Periodic re-runs are the entire mechanism for detecting model
+  drift; without one the capability has no trigger
+- **Own-code analysis** works but `scan_analyze` does not call it yet
+- **Reachability covers four languages.** Swift, Rust, Ruby and .NET are catalogued and
+  searchable, and their findings come back undetermined rather than narrowed
+- **Promotion has never run in production** — no tenant has enough scans to corroborate anything
 
-Design work uses the project skills in [`.claude/skills/`](.claude/skills/) —
-`requirements`, `data-model`, `api-design`, `architecture`, `adr`, and `design-doc` (which
-sequences the other five). Invoke them as `/requirements`, `/architecture`, and so on.
+## Licence
 
-The SDLC phase commands (`/plan`, `/implement`, `/test`, `/release`) are user-level and live
-outside this repository.
+Not yet chosen.
