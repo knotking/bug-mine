@@ -58,6 +58,10 @@ class TestCrawlToArtifact:
         class _Resp:
             content = body.encode()
             headers: ClassVar[dict[str, str]] = {"content-type": "application/json"}
+            # The crawler follows redirects itself, one hop at a time, so it asks every
+            # response whether it is one. Redirect behaviour is covered in
+            # tests/test_crawl_redirects.py; this stub is the plain-200 path.
+            is_redirect = False
 
             def raise_for_status(self) -> None: ...
 

@@ -48,8 +48,7 @@ def fetch_and_store(
         raise ValueError(f"{rejection.code}: {rejection.message}")
 
     with httpx.Client(timeout=timeout, follow_redirects=False) as http:
-        response = http.get(url, headers=_headers_for(url))
-        response.raise_for_status()
+        response, final_url = _get_following_redirects(http, url, timeout=timeout)
         body = response.content
 
     digest = hashlib.sha256(body).hexdigest()
@@ -65,7 +64,7 @@ def fetch_and_store(
             deduplicated=True,
         )
 
-    blob.metadata = {"source_url": url}
+    blob.metadata = {"source_url": url, "fetched_from": final_url}
     blob.upload_from_string(body, content_type=response.headers.get("content-type", "text/plain"))
     return CrawlResult(
         uri=f"gs://{bucket_name}/{blob_name}",
@@ -73,6 +72,52 @@ def fetch_and_store(
         bytes_fetched=len(body),
         deduplicated=False,
     )
+
+
+MAX_REDIRECTS = 5
+"""Enough for the http→https→canonical-host chains real documentation sites use, few enough
+that a redirect loop fails fast rather than tying up a worker."""
+
+
+def _get_following_redirects(
+    http: httpx.Client, url: str, *, timeout: float
+) -> tuple[httpx.Response, str]:
+    """Follow redirects one hop at a time, re-validating every hop.
+
+    httpx's own `follow_redirects=True` is unusable here: it would fetch each `Location`
+    without asking `urlguard`, so an allowlisted URL that redirects to 169.254.169.254 or to
+    an internal host would be fetched anyway — the exact hole the guard exists to close.
+
+    Not following them at all was the other extreme, and it quietly cost coverage. Vendor
+    documentation moves; `cloud.google.com/vertex-ai/...` now answers 301 to `docs.cloud
+    .google.com`. That source failed on every sweep, escalated its backoff, and was on its way
+    out of the catalog over a URL that had simply been renamed and was naming its own successor
+    in the response.
+
+    So: follow, but through the guard, and re-derive the headers each hop — the GitHub token
+    must not follow a redirect off GitHub.
+    """
+    seen = {url}
+    current = url
+    for _ in range(MAX_REDIRECTS):
+        response = http.get(current, headers=_headers_for(current))
+        if not response.is_redirect:
+            response.raise_for_status()
+            return response, current
+
+        location = response.headers.get("location")
+        if not location:
+            raise ValueError(f"redirect from {current} with no Location header")
+        target = str(response.url.join(location))
+
+        if rejection := urlguard.check(target):
+            raise ValueError(f"redirect to {target} rejected: {rejection.code}")
+        if target in seen:
+            raise ValueError(f"redirect loop at {target}")
+        seen.add(target)
+        current = target
+
+    raise ValueError(f"more than {MAX_REDIRECTS} redirects starting at {url}")
 
 
 GITHUB_HOSTS = frozenset({"api.github.com", "github.com", "raw.githubusercontent.com"})
