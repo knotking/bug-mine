@@ -167,3 +167,26 @@ def test_the_diagram_has_an_accessible_description() -> None:
     source = _source()
     block = re.search(r'<svg viewBox="0 0 880 400"[^>]*', source, re.S)
     assert block and 'role="img"' in block.group(0) and "aria-label" in block.group(0)
+
+
+def test_search_examples_are_grouped_and_curated() -> None:
+    """A flat row of seven names suggests the catalog is seven names deep. Grouping by what a
+    visitor might actually be running shows breadth, which is the argument."""
+    source = _source()
+    block = re.search(r"const EXAMPLES = \[(.*?)\n  \];", source, re.S)
+    assert block, "grouped examples not found"
+    groups = re.findall(r"\['([^']+)',", block.group(1))
+    assert len(groups) >= 5, f"only {len(groups)} example groups"
+
+
+def test_examples_are_filtered_by_live_record_counts() -> None:
+    """An example that returns nothing teaches a visitor the catalog is thin, when it is the
+    suggestion that went stale. Only components with records are offered."""
+    source = _source()
+    assert "refs.filter(r=>counts[r])" in source
+
+
+def test_the_example_counts_come_from_the_api_not_the_page() -> None:
+    """Hardcoded counts would be wrong within a day — the catalog grew fourfold today alone."""
+    source = _source()
+    assert "/v1/public/components?limit=200" in source
