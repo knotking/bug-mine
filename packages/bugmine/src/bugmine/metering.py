@@ -18,11 +18,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bugmine.models import CostBearer, Quota, UsageEvent, UsagePurpose
 from bugmine.models.jobs import Job
+
+logger = structlog.get_logger(__name__)
 
 RATE_CARD_VERSION = "2026-08"
 
@@ -31,6 +34,11 @@ RATE_CARD_VERSION = "2026-08"
 RATE_CARD: dict[str, dict[str, float]] = {
     "gemini-2.0-flash": {"input": 0.15, "output": 0.60, "cached_input": 0.0375},
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50, "cached_input": 0.075},
+    # Introductory pricing, $0.75/$3.75 per million, quoted as in effect until 2026-12-31;
+    # standard pricing doubles it to $1.50/$7.50 on 2027-01-01. Whoever is here in January
+    # updates this line. `cached_input` is derived at the 25% ratio the other two entries use,
+    # not separately quoted.
+    "gemini-3.7-flash": {"input": 0.75, "output": 3.75, "cached_input": 0.1875},
     "default": {"input": 0.50, "output": 2.00, "cached_input": 0.125},
 }
 
@@ -54,15 +62,36 @@ class Spend:
         return self.input_tokens + self.output_tokens + self.cached_input_tokens
 
 
-def price(model_id: str, spend: Spend) -> int:
-    """Cost in micros, at the rate card in effect now.
+def priced(model_id: str) -> tuple[dict[str, float], bool]:
+    """The rates to use, and whether they are the model's own or an estimate.
 
-    A model absent from the card raises rather than defaulting to zero: a silently free model
-    is a billing hole that grows quietly, and it looks like success.
+    This used to raise for an unknown model, on the reasoning that a silently free model is a
+    billing hole. The reasoning was right and the placement was not: `price` is called *after*
+    the model has already been paid, inside a job Cloud Tasks retries on failure. So an unknown
+    model did not stop the spend — it threw the tokens away, failed the job, and bought the
+    same extraction again on the next attempt, up to `max_attempts`.
+
+    That is exactly what happened. `gemini-3.7-flash` shipped as the configured model and was
+    never added here, so every extraction paid Vertex, crashed on this line, and was retried
+    five times, writing nothing. A guard against under-billing became a five-fold over-spend.
+
+    So an unknown model is now estimated at the default rate — never zero — and the estimate is
+    marked on the ledger row rather than hidden in it.
     """
     rates = RATE_CARD.get(model_id)
-    if rates is None:
-        raise KeyError(f"No rate card entry for {model_id!r}. Add one before using it.")
+    if rates is not None:
+        return rates, True
+    logger.error(
+        "no rate card entry for %r; charging the default rate and marking the row estimated. "
+        "Add the real rates.",
+        model_id,
+    )
+    return RATE_CARD["default"], False
+
+
+def price(model_id: str, spend: Spend) -> int:
+    """Cost in micros, at the rate card in effect now."""
+    rates, _ = priced(model_id)
     return round(
         spend.input_tokens * rates["input"]
         + spend.output_tokens * rates["output"]
@@ -122,6 +151,13 @@ def record(
     if (cost_bearer is CostBearer.TENANT) != (tenant_id is not None):
         raise ValueError("a tenant-borne cost needs a tenant, and a tenant needs tenant bearing")
 
+    rates, exact = priced(model_id)
+    cost = round(
+        spend.input_tokens * rates["input"]
+        + spend.output_tokens * rates["output"]
+        + spend.cached_input_tokens * rates["cached_input"]
+    )
+
     event = UsageEvent(
         job_id=job.id if job else None,
         cost_bearer=cost_bearer,
@@ -136,8 +172,8 @@ def record(
         cached_input_tokens=spend.cached_input_tokens,
         attempt=attempt,
         succeeded=succeeded,
-        rate_card_version=RATE_CARD_VERSION,
-        cost_micros=price(model_id, spend),
+        rate_card_version=RATE_CARD_VERSION if exact else f"{RATE_CARD_VERSION}+estimated",
+        cost_micros=cost,
     )
     session.add(event)
 
@@ -162,6 +198,7 @@ def spend_by_bearer(session: Session) -> dict[str, int]:
     ).all()
     return {bearer.value: int(total or 0) for bearer, total in rows}
 
+
 class QuotaExceeded(Exception):
     """Raised when a principal's monthly limit is already spent.
 
@@ -171,9 +208,7 @@ class QuotaExceeded(Exception):
     """
 
     def __init__(self, scope: str, spent: int, limit: int, unit: str) -> None:
-        super().__init__(
-            f"{scope} quota exhausted: {spent} of {limit} {unit} spent this month."
-        )
+        super().__init__(f"{scope} quota exhausted: {spent} of {limit} {unit} spent this month.")
         self.scope = scope
         self.spent = spent
         self.limit = limit
@@ -219,9 +254,7 @@ def resolve_quota(
     A team without its own limit falls back to the tenant's rather than being unbounded — the
     failure of a missing limit should be restrictive, not permissive.
     """
-    candidates = session.execute(
-        select(Quota).where(Quota.tenant_id == tenant_id)
-    ).scalars().all()
+    candidates = session.execute(select(Quota).where(Quota.tenant_id == tenant_id)).scalars().all()
     by_key = {(q.team_id, q.user_id): q for q in candidates}
     if user_id and (found := by_key.get((None, user_id))):
         return found
@@ -263,9 +296,7 @@ def quota_status(
     spent = session.execute(
         select(
             func.coalesce(func.sum(UsageEvent.cost_micros), 0),
-            func.coalesce(
-                func.sum(UsageEvent.input_tokens + UsageEvent.output_tokens), 0
-            ),
+            func.coalesce(func.sum(UsageEvent.input_tokens + UsageEvent.output_tokens), 0),
         ).where(*conditions)
     ).one()
 
@@ -291,13 +322,9 @@ def check_quota(
     Before, not after: the spend that would breach the limit has already happened by the time a
     call returns, and a check that runs afterwards reports the overage rather than preventing it.
     """
-    status = quota_status(
-        session, tenant_id=tenant_id, team_id=team_id, user_id=user_id, now=now
-    )
+    status = quota_status(session, tenant_id=tenant_id, team_id=team_id, user_id=user_id, now=now)
     if status.exceeded:
         if status.limit_micros is not None and status.spent_micros >= status.limit_micros:
             raise QuotaExceeded(status.scope, status.spent_micros, status.limit_micros, "micros")
-        raise QuotaExceeded(
-            status.scope, status.spent_tokens, status.limit_tokens or 0, "tokens"
-        )
+        raise QuotaExceeded(status.scope, status.spent_tokens, status.limit_tokens or 0, "tokens")
     return status
