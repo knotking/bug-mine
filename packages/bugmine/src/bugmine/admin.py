@@ -331,6 +331,34 @@ def source_prune(args: argparse.Namespace) -> int:
     return 0
 
 
+def source_retire(args: argparse.Namespace) -> int:
+    """Remove sources by URL, for the ones that have genuinely gone.
+
+    Distinct from `prune`, which removes duplicate registrations of a URL that still works.
+    This is for a URL that answers 404 on every sweep: eight of ours did, all of them repos
+    seeded under the wrong org (`boto3/boto3`, `zod/zod`, `esbuild/esbuild`). A permanently
+    dead source is not free — it consumes a slot in the rate-limit budget that decides how
+    much of the catalog gets refreshed in an hour, and it does so forever, because backoff
+    slows a source down without ever concluding it is gone.
+
+    Deliberately by exact URL and not by pattern. Retiring a source is how a component
+    silently stops being covered, and coverage loss is invisible in a way that reads as
+    "nothing known about this" rather than as an error.
+    """
+    from bugmine.models import Source
+
+    with tenant_session(_engine(), None) as session:
+        rows = session.execute(select(Source).where(Source.url.in_(args.url))).scalars().all()
+        found = {r.url for r in rows}
+        for row in rows:
+            session.delete(row)
+            print(f"  retired  {row.url[:88]}")
+        for missing in [u for u in args.url if u not in found]:
+            print(f"  not registered  {missing[:80]}")
+    print(f"  retired {len(rows)} of {len(args.url)} url(s)")
+    return 0
+
+
 def schema_check(args: argparse.Namespace) -> int:
     """Compare the database's alembic revision against the newest migration on disk.
 
@@ -409,6 +437,10 @@ def main(argv: list[str] | None = None) -> int:
     sp = src.add_parser("prune", help="Remove duplicate registrations of the same url")
     sp.add_argument("--tenant", help="Also prune this tenant's own sources (slug)")
     sp.set_defaults(func=source_prune)
+
+    sr = src.add_parser("retire", help="Remove sources whose url is permanently gone")
+    sr.add_argument("url", nargs="+", help="Exact url(s) to retire")
+    sr.set_defaults(func=source_retire)
 
     sch = sub.add_parser("schema").add_subparsers(dest="cmd", required=True)
     sc = sch.add_parser("check", help="Is the database schema current?")
