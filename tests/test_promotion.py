@@ -11,9 +11,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.engine import Engine
-
 from bugmine.db import tenant_session
 from bugmine.models import (
     BugRecord,
@@ -24,6 +21,8 @@ from bugmine.models import (
     SubjectDomain,
 )
 from bugmine.promotion import CORROBORATION_THRESHOLD, promote
+from sqlalchemy import select
+from sqlalchemy.engine import Engine
 
 # Promotion is the one path that legitimately reads across tenants, so it runs from a session
 # that bypasses RLS. Testing it through a normal session would prove only that RLS works.
@@ -69,7 +68,9 @@ def three_tenants(engine: Engine):  # type: ignore[no-untyped-def]
 
 
 class TestCorroboration:
-    def test_one_observer_is_not_enough(self, engine: Engine, owner_engine: Engine, three_tenants) -> None:  # type: ignore[no-untyped-def]
+    def test_one_observer_is_not_enough(
+        self, engine: Engine, owner_engine: Engine, three_tenants
+    ) -> None:  # type: ignore[no-untyped-def]
         """A single-tenant observation can identify its source even with the code stripped."""
         identity = f"id-{uuid.uuid4().hex[:8]}"
         _candidate(engine, three_tenants[0], identity, f"promo{uuid.uuid4().hex[:6]}")
@@ -78,7 +79,9 @@ class TestCorroboration:
         assert identity not in result.promoted
         assert result.held.get(identity) == 1
 
-    def test_the_threshold_promotes(self, engine: Engine, owner_engine: Engine, three_tenants) -> None:  # type: ignore[no-untyped-def]
+    def test_the_threshold_promotes(
+        self, engine: Engine, owner_engine: Engine, three_tenants
+    ) -> None:  # type: ignore[no-untyped-def]
         identity = f"id-{uuid.uuid4().hex[:8]}"
         ref = f"promo{uuid.uuid4().hex[:6]}"
         for tenant in three_tenants[:CORROBORATION_THRESHOLD]:

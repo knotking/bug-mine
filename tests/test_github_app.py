@@ -12,7 +12,6 @@ import hmac
 import json
 
 import pytest
-
 from bugmine.github_app import (
     CheckRunSummary,
     WebhookError,
@@ -140,9 +139,8 @@ class TestWebhookRoute:
     """The route, not just the helpers. This is the surface an attacker reaches."""
 
     def _client(self, engine, monkeypatch):  # type: ignore[no-untyped-def]
-        from fastapi.testclient import TestClient
-
         from bugmine.api import create_app
+        from fastapi.testclient import TestClient
 
         monkeypatch.setenv("BUGMINE_GITHUB_WEBHOOK_SECRET", SECRET)
         return TestClient(create_app(engine))

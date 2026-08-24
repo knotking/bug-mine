@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.engine import Engine
-
 from bugmine.advisor import Advice, StackComponent, StackProfile, advise, interactions
 from bugmine.catalog import IncomingBug, write
 from bugmine.db import tenant_session
 from bugmine.models import BugType, RecordOrigin, SubjectDomain
+from sqlalchemy.engine import Engine
 
 
 def _seed(engine: Engine, ref: str, *, title: str, bug_type=BugType.BREAKING_CHANGE,

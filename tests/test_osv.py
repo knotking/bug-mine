@@ -19,7 +19,12 @@ def _vuln(**over) -> dict:  # type: ignore[no-untyped-def]
         "affected": [
             {
                 "package": {"ecosystem": "PyPI", "name": "Django"},
-                "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "1.3"}, {"fixed": "1.3.4"}]}],
+                "ranges": [
+                    {
+                        "type": "ECOSYSTEM",
+                        "events": [{"introduced": "1.3"}, {"fixed": "1.3.4"}],
+                    }
+                ],
             }
         ],
     }
