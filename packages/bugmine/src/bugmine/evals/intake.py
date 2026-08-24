@@ -42,7 +42,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bugmine.catalog.writer import IncomingBug, write
-from bugmine.evals.rate import FailureRate, runs_needed, wilson
+from bugmine.evals.rate import FailureRate, runs_needed, runs_to_refute, wilson
 from bugmine.models import (
     BugRecord,
     BugType,
@@ -109,9 +109,15 @@ class Verdict:
         reports "nothing found" has, for a 1-in-100 defect, gathered evidence that could never
         have shown one — and reported that as reassurance.
         """
-        if self.rate.corroborated or self.behavioural_runs <= 0:
+        if self.rate.corroborated or self.rate.refuted or self.behavioural_runs <= 0:
             return 0
-        return runs_needed(self.rate.observed) if self.rate.observed > 0 else 0
+        if self.rate.observed > 0:
+            return runs_needed(self.rate.observed)
+        # Undetermined with nothing seen yet. Answering 0 here would read as "you are done",
+        # which is the precise failure this field exists to prevent: a suite concluding no
+        # defect from evidence that could never have shown one. The honest number is how many
+        # clean runs it would take to actually refute.
+        return runs_to_refute()
 
 
 def _pool_filters(sub_or_key, scope: PrivacyScope, tenant_id: uuid.UUID | None):  # type: ignore[no-untyped-def]

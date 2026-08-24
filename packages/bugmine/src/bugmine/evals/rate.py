@@ -96,6 +96,25 @@ def wilson(failures: int, runs: int, *, z: float = Z_95) -> FailureRate:
     )
 
 
+def runs_to_refute(*, z: float = Z_95) -> int:
+    """How many clean runs it takes to say a defect is *absent* rather than merely unseen.
+
+    The counterpart to `runs_needed`, and the one that is easy to omit. A suite with no failures
+    is in the most dangerous state it can be in: it looks like good news and is usually just a
+    small sample. Refuting requires driving the interval's *upper* bound below the tolerated
+    rate, which takes hundreds of runs — 20 clean runs does not come close.
+
+    Without this the caller has no number for the clean case, and "how many more runs" answered
+    with 0 reads as "stop, you are done".
+    """
+    runs = 10
+    while runs < 1_000_000:
+        if wilson(0, runs, z=z).refuted:
+            return runs
+        runs = int(runs * 1.5) + 1
+    return runs
+
+
 def runs_needed(target_rate: float, *, z: float = Z_95) -> int:
     """Roughly how many runs before a defect at `target_rate` becomes reportable.
 

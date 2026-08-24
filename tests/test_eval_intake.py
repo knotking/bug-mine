@@ -332,6 +332,27 @@ class TestVerdictWithoutSubmitting:
         assert v.state == "undetermined"
         assert v.runs_to_decide > 40
 
+    def test_a_clean_undetermined_run_is_not_told_it_is_finished(self, engine: Engine) -> None:
+        """Found against production, not in this suite.
+
+        40 clean runs came back `undetermined` with `runs_to_decide: 0` — a contradiction that
+        reads as "stop, you are done" to the exact caller this field exists to warn. With no
+        failures observed there is no rate to project from, so the honest number is how many
+        clean runs it would take to refute: 452, not 0.
+        """
+        with tenant_session(engine, None) as s:
+            v = intake.submit(s, _sub(runs=40, failures=0))
+        assert v.state == "undetermined"
+        assert v.runs_to_decide > 40, "an undetermined verdict must never report 0 runs to go"
+
+    def test_a_decided_verdict_reports_nothing_left_to_run(self, engine: Engine) -> None:
+        """0 means decided, in both directions. That is the only meaning it may carry."""
+        with tenant_session(engine, None) as s:
+            refuted = intake.submit(s, _sub(runs=600, failures=0))
+            corroborated = intake.submit(s, _sub(runs=100, failures=4))
+        assert refuted.state == "refuted" and refuted.runs_to_decide == 0
+        assert corroborated.state == "corroborated" and corroborated.runs_to_decide == 0
+
 
 class TestTheDatabaseIsWhatEnforcesIsolation:
     """Where the tenant boundary for eval evidence actually lives.
