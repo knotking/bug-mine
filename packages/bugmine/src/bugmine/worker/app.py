@@ -25,13 +25,15 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from google import genai
 from google.cloud import storage
 from pydantic import BaseModel
+from sqlalchemy import select
 
-from bugmine import metering
+from bugmine import github_app, metering
 from bugmine import scan as scan_mod
 from bugmine.catalog import write
 from bugmine.db import make_engine, tenant_session
 from bugmine.inventory import collect
 from bugmine.models import (
+    Component,
     CostBearer,
     JobState,
     JobType,
@@ -226,6 +228,8 @@ def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any
         )
         raise HTTPException(status_code=500, detail={"error": {"code": "analysis_failed"}}) from exc
 
+    _publish_check_run(app, tenant_id, scan_id, outcome, inventory)
+
     _finish_job(app, job_id, JobState.SUCCEEDED, tenant_id=tenant_id)
     return {
         "job_id": str(job_id),
@@ -240,6 +244,60 @@ def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any
         "unresolved_manifests": list(inventory.unresolved),
         "unanalysed_ecosystems": sorted(outcome.unanalysed_ecosystems),
     }
+
+
+def _publish_check_run(app: Any, tenant_id, scan_id, outcome, inventory) -> None:  # type: ignore[no-untyped-def]
+    """Report back to GitHub when this scan came from a pull request.
+
+    Failures here are logged and swallowed. The findings are already written and readable
+    through the API; losing the Check Run is a degraded report, and raising would fail the whole
+    analysis and lose the scan itself over a reporting step.
+    """
+    app_id = os.environ.get("BUGMINE_GITHUB_APP_ID", "")
+    key = os.environ.get("BUGMINE_GITHUB_PRIVATE_KEY", "")
+    if not (app_id and key):
+        return
+
+    with tenant_session(app.state.engine, tenant_id, commit=False) as s:
+        scan = s.get(Scan, scan_id)
+        job = s.get(Job, scan.job_id) if scan else None
+        payload = (job.payload or {}) if job else {}
+        repo_full_name = payload.get("repo_full_name") or (scan.repo_ref if scan else "")
+        head_sha = payload.get("ref") or (scan.commit_sha if scan else "")
+        installation = payload.get("installation_id")
+
+    if not (installation and payload.get("pr")):
+        return  # Not a pull request scan; nothing to report to.
+
+    summary = github_app.CheckRunSummary(
+        findings=len(outcome.findings),
+        suppressed=outcome.suppressed,
+        uncovered=len(outcome.uncovered),
+        unresolved=len(inventory.unresolved),
+    )
+    with tenant_session(app.state.engine, tenant_id, commit=False) as s:
+        components = {c.id: c.canonical_ref for c in s.execute(select(Component)).scalars()}
+    rows = [
+        {
+            "component": components.get(f.component_id, "unknown"),
+            "title": f.title,
+            "reachable": f.reachable,
+            "detail": f.detail,
+            "citations": [str(c.bug_version_id) for c in f.citations],
+        }
+        for f in outcome.findings
+    ]
+    try:
+        token = github_app.installation_token(app_id, key, int(installation))
+        github_app.post_check_run(
+            token=token,
+            repo_full_name=repo_full_name,
+            head_sha=head_sha,
+            summary=summary,
+            findings=rows,
+        )
+    except Exception:
+        logger.exception("could not publish check run for scan %s", scan_id)
 
 
 def _read_snapshot(app: Any, uri: str) -> bytes:

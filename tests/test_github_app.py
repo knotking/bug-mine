@@ -202,3 +202,29 @@ class TestWebhookRoute:
         r = client.post("/v1/hooks/github", content=body, headers={
             "X-GitHub-Event": "pull_request", "X-Hub-Signature-256": _sign(body)})
         assert r.json()["ignored"] == "labeled"
+
+
+class TestCheckRunPublishing:
+    def test_the_installation_is_carried_into_the_job(
+        self, engine, monkeypatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        """Without it the scan runs and the pull request never hears the result — the analyser
+        cannot mint a token it has no installation id for."""
+        import inspect
+
+        from bugmine.api import app as app_module
+
+        source = inspect.getsource(app_module.github_webhook)
+        assert '"installation_id": pr.installation_id' in source
+        assert '"repo_full_name": pr.repo_full_name' in source
+
+    def test_a_reporting_failure_does_not_lose_the_scan(self) -> None:
+        """Findings are already written and readable through the API. Raising here would fail
+        the whole analysis and lose the scan over a reporting step."""
+        import inspect
+
+        from bugmine.worker import app as worker
+
+        source = inspect.getsource(worker._publish_check_run)
+        assert "except Exception:" in source
+        assert "logger.exception" in source

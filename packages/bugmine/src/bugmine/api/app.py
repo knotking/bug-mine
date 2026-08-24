@@ -492,7 +492,15 @@ async def github_webhook(request: Request) -> dict[str, object]:
             tenant_id=tenant_id,
             job_type=JobType.SCAN_FETCH,
             state=JobState.QUEUED,
-            payload={"repo_url": pr.clone_url, "ref": pr.head_sha, "pr": pr.number},
+            payload={
+                "repo_url": pr.clone_url,
+                "ref": pr.head_sha,
+                "pr": pr.number,
+                # Carried through so the analyser can mint an installation token and report
+                # back. Without it the scan runs and the pull request never hears the result.
+                "installation_id": pr.installation_id,
+                "repo_full_name": pr.repo_full_name,
+            },
         )
         session.add(job)
         session.flush()

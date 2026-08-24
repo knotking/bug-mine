@@ -176,3 +176,72 @@ def render_summary(summary: CheckRunSummary, findings: list[dict[str, Any]]) -> 
             "their versions could not be resolved and they were not checked."
         )
     return "\n".join(lines)
+
+
+GITHUB_API = "https://api.github.com"
+
+
+def installation_token(app_id: str, private_key_pem: str, installation_id: int) -> str:
+    """Exchange the app JWT for an installation token.
+
+    Installation-scoped rather than app-scoped: the token can only touch repositories the
+    customer actually installed us on, so a bug here cannot reach an org that never agreed.
+    """
+    import httpx
+
+    jwt = app_jwt(app_id, private_key_pem)
+    with httpx.Client(timeout=20.0) as http:
+        response = http.post(
+            f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
+            headers={
+                "Authorization": f"Bearer {jwt}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        response.raise_for_status()
+        return response.json()["token"]
+
+
+def post_check_run(
+    *,
+    token: str,
+    repo_full_name: str,
+    head_sha: str,
+    summary: CheckRunSummary,
+    findings: list[dict[str, Any]],
+    details_url: str | None = None,
+) -> dict[str, Any]:
+    """Publish the result to the pull request.
+
+    `completed` with a conclusion in one call rather than in-progress then update: a check that
+    stays in progress because the second call failed is indistinguishable from one still running,
+    and reviewers wait on it.
+    """
+    import httpx
+
+    body = {
+        "name": "BugMine",
+        "head_sha": head_sha,
+        "status": "completed",
+        "conclusion": summary.conclusion,
+        "output": {
+            "title": summary.title,
+            "summary": render_summary(summary, findings),
+        },
+    }
+    if details_url:
+        body["details_url"] = details_url
+
+    with httpx.Client(timeout=20.0) as http:
+        response = http.post(
+            f"{GITHUB_API}/repos/{repo_full_name}/check-runs",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
