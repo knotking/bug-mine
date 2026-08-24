@@ -80,10 +80,16 @@ Each is a function beside `looks_like_github_releases`, in the worker that holds
 
 ## 4. The model path, for what genuinely needs prose
 
-- **SaaS status pages and changelogs** — Stripe, Twilio, GitHub, AWS, Cloudflare. This is the
-  `saas_platform` domain, currently one record. It is the domain where a behaviour change ships
-  with no version and often no announcement, so it is both the hardest to crawl and the one
-  competitors cannot cover at all.
+- **SaaS changelogs and behaviour notes.** The `saas_platform` domain holds one record, and it
+  is the domain where a change ships with no version and often no announcement — the hardest to
+  crawl and the one competitors cannot cover at all.
+
+  **Correction to this section.** Status *pages* turned out not to need the model path at all.
+  Probing 59 vendors found 46 with machine-readable feeds, 38 of them through Atlassian
+  Statuspage's `/api/v2/summary.json` — one parser for all 38. See
+  [`saas-status-sources.md`](saas-status-sources.md). That moves most of this domain into the
+  deterministic tier and ahead of step 5; only 13 probed vendors, plus prose changelogs, still
+  need a model.
 - **Database and queue release notes written as prose** — Postgres, Kafka, Couchbase.
 - **Performance regression reports.** The type sitting at 100 records. These are almost never
   structured, which is why the count is what it is.
@@ -149,7 +155,7 @@ as many components.
 | 2 | OSV bulk ingest | Nothing — code exists, needs a bulk fetch and a schedule |
 | 3 | Widen GitHub releases to ~1,500 | Sweep interval and GitHub rate limit, reconciled deliberately |
 | 4 | Issues/PRs, endoflife.date parsers | Step 3's rate-limit budget |
-| 5 | SaaS via the model path | Token budget — this is cost of goods, not R&D |
+| 5 | SaaS status feeds, deterministic | Nothing — 46 feeds confirmed. Needs a rule for which incidents are records ([`saas-status-sources.md`](saas-status-sources.md) S1) |
 | 6 | LLM publishers and scheduled evals | Eval scheduler, which does not exist yet |
 
 Steps 2 and 3 are the ones that change the numbers. Step 5 is the one that changes what the

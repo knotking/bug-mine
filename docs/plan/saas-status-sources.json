@@ -1,0 +1,362 @@
+{
+  "note": "SaaS status sources for the saas_platform domain. Every feed_url below returned HTTP 200 with the content type its feed_kind implies, probed 2026-08-24. Entries under `unresolved` have a live status page but no feed this probe could find \u2014 they need a manual check or the model path.",
+  "probed_at": "2026-08-24",
+  "records": [
+    {
+      "component_ref": "anthropic",
+      "status_page": "https://status.anthropic.com/",
+      "feed_url": "https://status.anthropic.com/history.atom",
+      "feed_kind": "atom"
+    },
+    {
+      "component_ref": "twitch",
+      "status_page": "https://status.twitch.tv/",
+      "feed_url": "https://status.twitch.tv/history.atom",
+      "feed_kind": "atom"
+    },
+    {
+      "component_ref": "zoom",
+      "status_page": "https://status.zoom.us/",
+      "feed_url": "https://status.zoom.us/history.atom",
+      "feed_kind": "atom"
+    },
+    {
+      "component_ref": "aws",
+      "status_page": "https://health.aws.amazon.com/health/status",
+      "feed_url": "https://status.aws.amazon.com/rss/all.rss",
+      "feed_kind": "rss"
+    },
+    {
+      "component_ref": "azure",
+      "status_page": "https://azure.status.microsoft/en-us/status/",
+      "feed_url": "https://azure.status.microsoft/en-us/status/feed/",
+      "feed_kind": "rss"
+    },
+    {
+      "component_ref": "adyen",
+      "status_page": "https://status.adyen.com/",
+      "feed_url": "https://status.adyen.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "airtable",
+      "status_page": "https://status.airtable.com/",
+      "feed_url": "https://status.airtable.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "atlassian",
+      "status_page": "https://status.atlassian.com/",
+      "feed_url": "https://status.atlassian.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "box",
+      "status_page": "https://status.box.com/",
+      "feed_url": "https://status.box.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "circleci",
+      "status_page": "https://status.circleci.com/",
+      "feed_url": "https://status.circleci.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "cloudflare",
+      "status_page": "https://www.cloudflarestatus.com/",
+      "feed_url": "https://www.cloudflarestatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "confluent",
+      "status_page": "https://status.confluent.cloud/",
+      "feed_url": "https://status.confluent.cloud/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "datadog",
+      "status_page": "https://status.datadoghq.com/",
+      "feed_url": "https://status.datadoghq.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "digitalocean",
+      "status_page": "https://status.digitalocean.com/",
+      "feed_url": "https://status.digitalocean.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "discord",
+      "status_page": "https://discordstatus.com/",
+      "feed_url": "https://discordstatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "dropbox",
+      "status_page": "https://status.dropbox.com/",
+      "feed_url": "https://status.dropbox.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "elastic",
+      "status_page": "https://status.elastic.co/",
+      "feed_url": "https://status.elastic.co/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "figma",
+      "status_page": "https://status.figma.com/",
+      "feed_url": "https://status.figma.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "flyio",
+      "status_page": "https://status.flyio.net/",
+      "feed_url": "https://status.flyio.net/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "github",
+      "status_page": "https://www.githubstatus.com/",
+      "feed_url": "https://www.githubstatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "hubspot",
+      "status_page": "https://status.hubspot.com/",
+      "feed_url": "https://status.hubspot.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "jfrog",
+      "status_page": "https://status.jfrog.io/",
+      "feed_url": "https://status.jfrog.io/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "linode",
+      "status_page": "https://status.linode.com/",
+      "feed_url": "https://status.linode.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "mailgun",
+      "status_page": "https://status.mailgun.com/",
+      "feed_url": "https://status.mailgun.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "mongodb",
+      "status_page": "https://status.mongodb.com/",
+      "feed_url": "https://status.mongodb.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "netlify",
+      "status_page": "https://www.netlifystatus.com/",
+      "feed_url": "https://www.netlifystatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "newrelic",
+      "status_page": "https://status.newrelic.com/",
+      "feed_url": "https://status.newrelic.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "npm",
+      "status_page": "https://status.npmjs.org/",
+      "feed_url": "https://status.npmjs.org/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "openai",
+      "status_page": "https://status.openai.com/",
+      "feed_url": "https://status.openai.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "plaid",
+      "status_page": "https://status.plaid.com/",
+      "feed_url": "https://status.plaid.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "planetscale",
+      "status_page": "https://www.planetscalestatus.com/",
+      "feed_url": "https://www.planetscalestatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "pypi",
+      "status_page": "https://status.python.org/",
+      "feed_url": "https://status.python.org/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "redis",
+      "status_page": "https://status.redis.io/",
+      "feed_url": "https://status.redis.io/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "render",
+      "status_page": "https://status.render.com/",
+      "feed_url": "https://status.render.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "replicate",
+      "status_page": "https://www.replicatestatus.com/",
+      "feed_url": "https://www.replicatestatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "sendgrid",
+      "status_page": "https://status.sendgrid.com/",
+      "feed_url": "https://status.sendgrid.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "sentry",
+      "status_page": "https://status.sentry.io/",
+      "feed_url": "https://status.sentry.io/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "shopify",
+      "status_page": "https://www.shopifystatus.com/",
+      "feed_url": "https://www.shopifystatus.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "snowflake",
+      "status_page": "https://status.snowflake.com/",
+      "feed_url": "https://status.snowflake.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "squareup",
+      "status_page": "https://www.issquareup.com/",
+      "feed_url": "https://www.issquareup.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "supabase",
+      "status_page": "https://status.supabase.com/",
+      "feed_url": "https://status.supabase.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "twilio",
+      "status_page": "https://status.twilio.com/",
+      "feed_url": "https://status.twilio.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "vercel",
+      "status_page": "https://www.vercel-status.com/",
+      "feed_url": "https://www.vercel-status.com/api/v2/summary.json",
+      "feed_kind": "statuspage-v2"
+    },
+    {
+      "component_ref": "google-cloud",
+      "status_page": "https://status.cloud.google.com/",
+      "feed_url": "https://status.cloud.google.com/incidents.json",
+      "feed_kind": "vendor-json"
+    },
+    {
+      "component_ref": "heroku",
+      "status_page": "https://status.heroku.com/",
+      "feed_url": "https://status.heroku.com/api/v4/current-status",
+      "feed_kind": "vendor-json"
+    },
+    {
+      "component_ref": "slack",
+      "status_page": "https://slack-status.com/",
+      "feed_url": "https://slack-status.com/api/v2.0.0/current",
+      "feed_kind": "vendor-json"
+    }
+  ],
+  "unresolved": [
+    {
+      "component_ref": "auth0",
+      "status_page": "https://status.auth0.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "databricks",
+      "status_page": "https://status.databricks.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "dockerhub",
+      "status_page": "https://www.dockerstatus.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "fastly",
+      "status_page": "https://status.fastly.com/",
+      "http": "403",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "gitlab",
+      "status_page": "https://status.gitlab.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "huggingface",
+      "status_page": "https://status.huggingface.co/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "notion",
+      "status_page": "https://status.notion.so/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "okta",
+      "status_page": "https://status.okta.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "pagerduty",
+      "status_page": "https://status.pagerduty.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "paypal",
+      "status_page": "https://www.paypal-status.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "postmark",
+      "status_page": "https://status.postmarkapp.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "stripe",
+      "status_page": "https://status.stripe.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    },
+    {
+      "component_ref": "zendesk",
+      "status_page": "https://status.zendesk.com/",
+      "http": "200",
+      "note": "page resolves; no machine-readable feed found by probe"
+    }
+  ]
+}
