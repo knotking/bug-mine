@@ -16,10 +16,12 @@ unconfirmed*, never to silence. Only a positive determination that the code is u
 suppresses anything.
 """
 
+from bugmine.reach.golang import analyse_go_source, references_in_go
 from bugmine.reach.javascript import (
     analyse_javascript_source,
     references_in_javascript,
 )
+from bugmine.reach.jvm import analyse_jvm_source, references_in_jvm
 from bugmine.reach.python import analyse_python_source, references_in_python
 from bugmine.reach.symbols import affected_symbols
 from bugmine.reach.verdict import Evidence, Reach
@@ -28,8 +30,12 @@ __all__ = [
     "Evidence",
     "Reach",
     "affected_symbols",
+    "analyse_go_source",
     "analyse_javascript_source",
+    "analyse_jvm_source",
     "analyse_python_source",
+    "references_in_go",
     "references_in_javascript",
+    "references_in_jvm",
     "references_in_python",
 ]

@@ -30,7 +30,9 @@ from bugmine.models import BugType, Component, Finding, FindingCitation, Subject
 from bugmine.reach import (
     Reach,
     affected_symbols,
+    analyse_go_source,
     analyse_javascript_source,
+    analyse_jvm_source,
     analyse_python_source,
 )
 
@@ -52,7 +54,7 @@ ECOSYSTEM_DOMAIN = {
 
 # Reachability is implemented per language. An ecosystem absent here is not "clean" — it is
 # unanalysed, and its findings are reported undetermined rather than narrowed away.
-REACHABILITY_SUPPORTED = frozenset({"pypi", "npm"})
+REACHABILITY_SUPPORTED = frozenset({"pypi", "npm", "maven", "go"})
 
 UNCONFIRMED_REACH_CONFIDENCE = 0.5
 """A finding we could not narrow is worth reporting and worth distinguishing. Halving rather
@@ -106,6 +108,16 @@ def analyse(
         for p, s in sources.items()
         if p.endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"))
     }
+    jvm_sources = {p: s for p, s in sources.items() if p.endswith((".java", ".kt", ".kts"))}
+    go_sources = {p: s for p, s in sources.items() if p.endswith(".go")}
+    # One place the language of a dependency maps to the source it could possibly be in. Keeping
+    # it here rather than in branches means adding a language cannot half-happen.
+    by_ecosystem = {
+        "pypi": (python_sources, analyse_python_source),
+        "npm": (js_sources, analyse_javascript_source),
+        "maven": (jvm_sources, analyse_jvm_source),
+        "go": (go_sources, analyse_go_source),
+    }
 
     for dependency in dependencies:
         domain = ECOSYSTEM_DOMAIN.get(dependency.ecosystem)
@@ -125,7 +137,7 @@ def analyse(
             continue
 
         for match in matches:
-            reach = _reachability(dependency, match, python_sources, js_sources, outcome)
+            reach = _reachability(dependency, match, by_ecosystem, outcome)
             if reach.suppressible:
                 # The whole point: a known defect in a dependency this project never calls.
                 outcome.suppressed += 1
@@ -158,15 +170,14 @@ def analyse(
 def _reachability(
     dependency: Dependency,
     match: object,
-    python_sources: dict[str, str],
-    js_sources: dict[str, str],
+    by_ecosystem: dict,
     outcome: ScanOutcome,
 ) -> Reach:
     if dependency.ecosystem not in REACHABILITY_SUPPORTED:
         outcome.unanalysed_ecosystems.add(dependency.ecosystem)
         return Reach.unknown(f"reachability is not implemented for {dependency.ecosystem}")
 
-    files = python_sources if dependency.ecosystem == "pypi" else js_sources
+    files, analyse = by_ecosystem[dependency.ecosystem]
     if not files:
         # Source of the right language is absent — a gap in what we were given, not evidence
         # the dependency is untouched.
@@ -174,7 +185,6 @@ def _reachability(
 
     version = match.version  # type: ignore[attr-defined]
     symbols = affected_symbols(version.title, version.description)
-    analyse = analyse_python_source if dependency.ecosystem == "pypi" else analyse_javascript_source
     return analyse(files, component=dependency.name, symbols=symbols)
 
 

@@ -41,7 +41,12 @@ _STOPWORDS = frozenset(
 _DOC_PREFIX = re.compile(r"^_[a-z][a-z0-9_]*\.")
 
 
-def _clean(candidate: str) -> str | None:
+def _clean(candidate: str, *, explicit: bool = False) -> str | None:
+    """`explicit` means the author marked this as code — with backticks or call syntax — so the
+    stopword filter does not apply. `New()` in Go and `Flow` in Kotlin are real symbols that
+    happen to be common words, and filtering them yields no symbols at all, which resolves to
+    "cannot tell" and reports the finding unconfirmed rather than narrowing it.
+    """
     candidate = candidate.strip().strip("().,;:")
     candidate = _DOC_PREFIX.sub("", candidate)
     if not candidate or " " in candidate:
@@ -49,10 +54,11 @@ def _clean(candidate: str) -> str | None:
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", candidate):
         return None
     parts = candidate.split(".")
+    if explicit:
+        return candidate
     # Every segment being a common word means this is a sentence, not a symbol.
     if all(p.lower() in _STOPWORDS for p in parts):
         return None
-    # A bare lowercase common word is prose even when the record backticked it.
     if len(parts) == 1 and candidate.lower() in _STOPWORDS:
         return None
     return candidate
@@ -69,13 +75,17 @@ def affected_symbols(title: str, description: str | None = None) -> frozenset[st
 
     for text in (title, description or ""):
         for raw in _BACKTICKED.findall(text):
-            if cleaned := _clean(raw):
+            if cleaned := _clean(raw, explicit=True):
                 found.add(cleaned)
 
-    for pattern in (_DOTTED, _CALL):
-        for raw in pattern.findall(title):
-            if cleaned := _clean(raw):
-                found.add(cleaned)
+    # Call syntax is explicit too: `New()` is a call, not the word "new".
+    for raw in _CALL.findall(title):
+        if cleaned := _clean(raw, explicit=True):
+            found.add(cleaned)
+
+    for raw in _DOTTED.findall(title):
+        if cleaned := _clean(raw):
+            found.add(cleaned)
 
     # A dotted name implies its own leaf: a record about `Session.flush` should match code that
     # imported `flush` directly.
