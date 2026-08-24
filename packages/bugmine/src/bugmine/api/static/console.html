@@ -1160,6 +1160,31 @@ GET  /v1/scans/{id}/findings</pre></div>
     </div>
   </div>`;
 
+  /* The landing page renders its own theme picker and sign-in sheet, so it has to wire them
+     too. `render()` wires the console's copies, and `render()` only runs once you are already
+     signed in — so without this the picker was inert, no Sign in button opened anything, and
+     the "your session ended" message rendered into a sheet that never became visible. */
+  wireTheme();
+
+  const sheet=document.getElementById('sheet');
+  const openSheet=e=>{
+    if(e) e.preventDefault();
+    sheet.hidden=false;
+    document.getElementById('em').focus();
+  };
+  const closeSheet=()=>{ sheet.hidden=true; };
+  ['open-signin','cta-signin','foot-signin'].forEach(id=>{
+    document.getElementById(id).onclick=openSheet;
+  });
+  document.getElementById('sheet-x').onclick=closeSheet;
+  // Backdrop click closes, a click inside the card does not. Escape closes as well: a dialog
+  // with no way out is worse than no dialog.
+  sheet.onclick=e=>{ if(e.target===sheet) closeSheet(); };
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !sheet.hidden) closeSheet(); });
+  // A message means we arrived here from an expired session or a rejected key, and it is
+  // written inside the sheet — so the sheet has to be open for it to be read at all.
+  if(msg) openSheet();
+
   fetch('/v1/public/stats').then(r=>r.json()).then(st=>{
     const n=v=>Number(v||0).toLocaleString();
     const figs=document.getElementById('figs');

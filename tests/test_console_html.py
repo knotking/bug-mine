@@ -280,3 +280,45 @@ def test_the_search_box_is_wired_to_something_real() -> None:
     script = _script()
     assert re.search(r"(?:async\s+)?function\s+demo\s*\(", script), "demo() is not defined"
     assert "/v1/public/bugs/search" in script, "demo() does not call the search endpoint"
+
+
+def _signin_body() -> str:
+    """The signed-out landing page, from `function signin(` to the views section after it."""
+    source = _source()
+    start = source.index("function signin(msg){")
+    return source[start : source.index("/* ---------------- views", start)]
+
+
+def test_every_button_and_link_id_is_referenced_from_the_script() -> None:
+    """A control the script never looks up is a control that does nothing when clicked.
+
+    The landing page rendered a theme picker and three Sign in buttons and wired none of them:
+    `wireTheme()` ran only from `render()`, which runs only when already signed in, and nothing
+    referenced the sheet at all. Both failures are silent — no error, no console warning, just
+    a page where clicking does nothing.
+    """
+    source = _source()
+    controls = set(re.findall(r'<button\b[^>]*\bid="([\w-]+)"', source))
+    controls |= set(re.findall(r'<a\b[^>]*\bid="([\w-]+)"', source))
+    # A quoted id counts: ids are also wired by iterating a list of names.
+    unwired = sorted(
+        name
+        for name in controls
+        if f"getElementById('{name}')" not in source
+        and f"querySelector('#{name}')" not in source
+        and f"'{name}'" not in source
+    )
+    assert unwired == [], f"controls that no script ever looks up: {unwired}"
+
+
+def test_the_signed_out_page_wires_its_own_theme_picker() -> None:
+    """`render()` wires the console's picker, and it never runs for a signed-out visitor."""
+    assert "wireTheme()" in _signin_body()
+
+
+def test_the_sign_in_sheet_can_be_opened() -> None:
+    """The sheet is `hidden` in the markup, so something has to unhide it — including for the
+    session-expiry message, which is written inside it."""
+    body = _signin_body()
+    assert "sheet.hidden=false" in body
+    assert "if(msg) openSheet();" in body
