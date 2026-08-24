@@ -215,6 +215,30 @@ class FindingOut(BaseModel):
     citations: list[str]
 
 
+class StackComponentIn(BaseModel):
+    ref: str
+    version: str | None = None
+    ecosystem: str | None = None
+    subject_domain: SubjectDomain = SubjectDomain.REPO_LIBRARY
+
+
+class AdviseIn(BaseModel):
+    components: list[StackComponentIn] = Field(default_factory=list)
+    intention: str | None = None
+    expected_scale: str | None = None
+
+
+class AdviceOut(BaseModel):
+    grounded: list[dict[str, Any]]
+    """Findings from catalog records, each cited."""
+    unknowns: list[str]
+    """Specific missing facts. Non-empty with no findings means "not enough information to say",
+    which is a different answer from "no known problems" and must not be read as one."""
+    not_covered: list[str]
+    interactions: list[dict[str, Any]]
+    has_enough_to_say: bool
+
+
 class QuotaOut(BaseModel):
     id: str
     scope: Literal["tenant", "team", "user"]

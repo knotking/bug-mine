@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from bugmine import github_app, metering, tasks, urlguard
+from bugmine import advisor, github_app, metering, tasks, urlguard
 from bugmine import scan as scan_mod
 from bugmine import sweep as sweep_mod
 from bugmine.api import schemas as S
@@ -544,6 +544,43 @@ def _tenant_for_installation(request: Request, installation_id: int | None):  # 
         return tenant.id if tenant else None
 
 
+advisor_router = APIRouter(prefix="/v1", tags=["advisor"])
+
+
+@advisor_router.post("/advise", response_model=S.AdviceOut)
+def advise_stack(
+    body: S.AdviseIn,
+    session: Session = Depends(tenant_db),
+) -> S.AdviceOut:
+    """What you will run into, given a stack you describe rather than a repo you wrote.
+
+    `has_enough_to_say` is the field that matters. False with an empty `grounded` means we do
+    not know, and a caller rendering that as "no problems found" would be turning our ignorance
+    into their reassurance — the failure FR-26 exists to prevent.
+    """
+    profile = advisor.StackProfile(
+        components=tuple(
+            advisor.StackComponent(
+                ref=c.ref.strip().lower(),
+                version=c.version,
+                ecosystem=c.ecosystem,
+                subject_domain=c.subject_domain,
+            )
+            for c in body.components
+        ),
+        intention=body.intention,
+        expected_scale=body.expected_scale,
+    )
+    advice = advisor.advise(session, profile)
+    return S.AdviceOut(
+        grounded=[{**f, "bug_type": f["bug_type"].value} for f in advice.grounded],
+        unknowns=advice.unknowns,
+        not_covered=advice.not_covered,
+        interactions=advisor.interactions(session, profile),
+        has_enough_to_say=advice.has_enough_to_say,
+    )
+
+
 console = APIRouter(prefix="/v1", tags=["console"])
 
 
@@ -1042,6 +1079,7 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     # if Firebase is ever down.
     project = os.environ.get("BUGMINE_FIREBASE_PROJECT")
     app.state.firebase = TokenVerifier(project) if project else None
+    app.include_router(advisor_router)
     app.include_router(hooks)
     app.include_router(public)
     app.include_router(catalog)
