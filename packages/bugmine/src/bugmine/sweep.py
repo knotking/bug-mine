@@ -118,6 +118,16 @@ def add_source(
 ) -> Source:
     if (privacy_scope is PrivacyScope.TENANT) != (tenant_id is not None):
         raise ValueError("tenant scope requires a tenant, and a tenant requires tenant scope")
+
+    # Idempotent on url within a scope. Without this, re-running a source list duplicates every
+    # entry in it — which happened twice, and a source registered twice is crawled twice,
+    # spending the rate-limit budget that decides how much of the catalog refreshes in an hour.
+    existing = session.execute(
+        select(Source).where(Source.url == url, Source.tenant_id == tenant_id)
+    ).scalars().first()
+    if existing is not None:
+        return existing
+
     source = Source(
         url=url,
         subject_domain=subject_domain,

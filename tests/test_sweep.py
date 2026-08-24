@@ -12,9 +12,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from bugmine.db import tenant_session
-from bugmine.models import PrivacyScope, SubjectDomain
+from bugmine.models import PrivacyScope, Source, SubjectDomain
 from bugmine.sweep import add_source, find_stale, record_failure, record_success, sweep
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 
 NOW = datetime(2026, 8, 23, 12, 0, tzinfo=UTC)
 
@@ -173,3 +173,58 @@ class TestScope:
             calls: list[dict] = []
             sweep(s, calls.append, now=NOW)
         assert all(c["url"] != url for c in calls), "tenant B swept tenant A's source"
+
+
+class TestSuccessIsActuallyRecorded:
+    """The sweep marks a source *attempted*; only the fetch can mark it succeeded.
+
+    Nothing was calling record_success, so last_success_at stayed null for every source. Three
+    things broke at once and all of them looked like something else: every source was
+    permanently stale so the staleness alarm was meaningless, `failing` was permanently true so
+    the retry backoff stayed pinned at its shortest interval, and the queue therefore refilled
+    faster than it drained.
+    """
+
+    def test_the_crawl_worker_records_success(self) -> None:
+        import inspect
+
+        from bugmine.worker import app as worker
+
+        source = inspect.getsource(worker.do_crawl)
+        assert "record_success" in source, "a successful crawl must mark the source succeeded"
+
+    def test_the_crawl_worker_records_failure(self) -> None:
+        import inspect
+
+        from bugmine.worker import app as worker
+
+        source = inspect.getsource(worker.do_crawl)
+        assert "record_failure" in source, "a failed crawl must count against the source"
+
+    def test_recording_success_clears_the_failure_count(self, engine: Engine) -> None:
+        """Otherwise a source that recovers keeps backing off as though it were still broken."""
+        url = _url()
+        with tenant_session(engine, None) as s:
+            src = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+            src.consecutive_failures = 4
+            record_failure(s, url)
+            record_success(s, url)
+        with tenant_session(engine, None, commit=False) as s:
+            found = s.execute(select(Source).where(Source.url == url)).scalars().first()
+        assert found.consecutive_failures == 0
+        assert found.last_success_at is not None
+
+
+class TestAddSourceIsIdempotent:
+    def test_registering_the_same_url_twice_yields_one_source(self, engine: Engine) -> None:
+        """Re-running a source list duplicated every entry in it — twice. A source registered
+        twice is crawled twice, spending the rate-limit budget that decides how much of the
+        catalog refreshes in an hour."""
+        url = _url()
+        with tenant_session(engine, None) as s:
+            first = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+            second = add_source(s, url=url, subject_domain=SubjectDomain.REPO_LIBRARY)
+            assert first.id == second.id
+        with tenant_session(engine, None, commit=False) as s:
+            rows = s.execute(select(Source).where(Source.url == url)).scalars().all()
+        assert len(rows) == 1

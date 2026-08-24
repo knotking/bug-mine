@@ -29,6 +29,7 @@ from sqlalchemy import select
 
 from bugmine import github_app, metering
 from bugmine import scan as scan_mod
+from bugmine import sweep as sweep_mod
 from bugmine.catalog import write
 from bugmine.db import make_engine, tenant_session
 from bugmine.inventory import collect
@@ -400,8 +401,17 @@ def do_crawl(body: CrawlRequest, request: Request) -> dict[str, Any]:
         )
     except Exception as exc:
         logger.exception("crawl failed for %s", body.url)
+        with tenant_session(app.state.engine, None) as s:
+            sweep_mod.record_failure(s, body.url)
         _finish_job(app, job_id, JobState.FAILED, f"{type(exc).__name__}: {exc}"[:500])
         raise HTTPException(status_code=502, detail={"error": {"code": "fetch_failed"}}) from exc
+
+    # The sweep marks a source *attempted* when it enqueues; only the fetch can mark it
+    # succeeded. Nothing was calling this, so last_success_at stayed null for every source —
+    # which made every source permanently stale, kept `failing` permanently true, and left the
+    # retry backoff pinned at its shortest interval so the queue refilled faster than it drained.
+    with tenant_session(app.state.engine, None) as s:
+        sweep_mod.record_success(s, body.url)
 
     # Chain extraction only when the fetch produced something new. This is where the dedup
     # gate turns into money saved: an unchanged source enqueues nothing and spends no tokens.
