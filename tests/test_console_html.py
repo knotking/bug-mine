@@ -211,3 +211,70 @@ def test_the_examples_panel_closes_on_escape_and_click_outside() -> None:
     source = _source()
     assert "e.key === 'Escape'" in source
     assert "document.addEventListener('click', close)" in source
+
+
+# Browser and language globals the page may call without defining. Anything else it calls has
+# to be defined in the page itself.
+_BROWSER_GLOBALS = frozenset(
+    """
+    fetch alert confirm prompt setTimeout setInterval clearTimeout clearInterval
+    encodeURIComponent decodeURIComponent encodeURI decodeURI parseInt parseFloat isNaN
+    String Number Boolean Object Array Date Math JSON Promise Error Map Set RegExp Symbol
+    requestAnimationFrame cancelAnimationFrame queueMicrotask structuredClone btoa atob
+    URLSearchParams URL FormData Headers Request Response AbortController IntersectionObserver
+    localStorage sessionStorage document window console navigator location history
+    addEventListener removeEventListener dispatchEvent matchMedia getComputedStyle scrollTo
+    if for while switch catch return typeof instanceof new delete void await async function
+    var
+    """.split()
+)
+
+_DEFINITION = (
+    r"(?:function\s+{name}\b"
+    r"|(?:const|let|var)\s+{name}\s*="
+    r"|{name}\s*=\s*(?:async\s*)?(?:function|\()"
+    # Object-literal method shorthand — `async catalog(){...}` inside the screens map is how
+    # most of this page's functions are actually written.
+    r"|^\s*(?:async\s+)?{name}\s*\([^)]*\)\s*\{{)"
+)
+
+
+def _script() -> str:
+    source = _source()
+    return source[source.index("<script>") + len("<script>") : source.rindex("</script>")]
+
+
+def test_every_function_the_page_calls_is_defined() -> None:
+    """The test that would have caught search breaking.
+
+    Rewriting the examples into a dropdown replaced a block of script that happened to contain
+    `demo()`, the function behind the search box. `node --check` still passed — the syntax was
+    fine, the function simply was not there — and every other test here asserts about markup
+    and CSS, so nothing failed. In the browser, clicking Search threw ReferenceError and the
+    page did nothing at all.
+
+    A call to something undefined is exactly the failure a static page has no other way to
+    surface: no build step, no type checker, and no error until a person clicks.
+    """
+    script = _script()
+    # Bare identifier calls only. A method call has a receiver that would have to exist anyway,
+    # and checking those needs real scope analysis rather than a regex.
+    # No space before the paren: `Request failed (${status})` inside a template literal is
+    # prose, not a call, and allowing the space made the check report it as one.
+    called = {m.group(1) for m in re.finditer(r"(?<![.\w$])([A-Za-z_$][\w$]*)\(", script)}
+    undefined = sorted(
+        name
+        for name in called - _BROWSER_GLOBALS
+        if not re.search(_DEFINITION.format(name=re.escape(name)), script, re.M)
+    )
+    assert not undefined, f"called but never defined: {undefined}"
+
+
+def test_the_search_box_is_wired_to_something_real() -> None:
+    """Named separately from the general check because this is the page's whole point.
+
+    If the general test above is ever loosened, this one still fails when search is unwired.
+    """
+    script = _script()
+    assert re.search(r"(?:async\s+)?function\s+demo\s*\(", script), "demo() is not defined"
+    assert "/v1/public/bugs/search" in script, "demo() does not call the search endpoint"

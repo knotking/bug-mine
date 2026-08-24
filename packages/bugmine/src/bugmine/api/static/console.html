@@ -1118,6 +1118,51 @@ GET  /v1/scans/{id}/findings</pre></div>
     });
   }).catch(()=>{});
 
+  const err = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display=''; };
+
+
+
+  const paint=()=>{
+    const out=document.getElementById('pout'), tabs=document.getElementById('ptabs');
+    const shown = filter==='all' ? hits : hits.filter(b=>b.bug_type===filter);
+    const counts = hits.reduce((m,b)=>(m[b.bug_type]=(m[b.bug_type]||0)+1,m),{});
+    const order = ['breaking_change','deprecation','security','functional','performance'];
+
+    tabs.hidden = !hits.length;
+    tabs.innerHTML = !hits.length ? '' : [['all','Everything',hits.length]]
+      .concat(order.filter(t=>counts[t]).map(t=>[t,t.replace(/_/g,' '),counts[t]]))
+      .map(([k,label,n])=>`<button data-f="${k}" aria-current="${filter===k}">${esc(label)}
+        <span class="n">${n}</span></button>`).join('');
+    tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{filter=b.dataset.f;paint();});
+
+    out.innerHTML = shown.length ? shown.map(b=>{
+      const a=b.applicability||{};
+      const v=a.introduced_in?`from ${esc(a.introduced_in)}`
+             :(a.fixed_in?`fixed ${esc(a.fixed_in)}`:'—');
+      return `<div class="hit" style="--row-accent:var(--${esc(b.bug_type)},var(--accent))">
+        <span class="tag t-${esc(b.bug_type)}">${esc(b.bug_type.replace(/_/g,' '))}</span>
+        <span class="c">${esc(b.component.ref)}</span>
+        <span class="t">${esc(b.title)}</span>
+        <span class="v">${v}</span></div>`;
+    }).join('')
+      : `<div class="empty">No coverage for &ldquo;${esc(lastQ)}&rdquo; yet — which means we do
+         not know about it, not that it is healthy.</div>`;
+  };
+
+  async function demo(q){
+    const out=document.getElementById('pout');
+    if(!q){ hits=[]; lastQ=''; document.getElementById('ptabs').hidden=true; out.innerHTML=''; return; }
+    lastQ=q; filter='all';
+    out.innerHTML='<div class="skel" style="height:44px"></div>';
+    try{
+      // Fetched once and filtered here: re-querying per tab would let the counts and the rows
+      // disagree whenever a crawl landed between two requests.
+      const r=await fetch(`/v1/public/bugs/search?limit=60&q=${encodeURIComponent(q)}`);
+      hits=await r.json();
+      paint();
+    }catch{ hits=[]; out.innerHTML='<p class="error">Search is unavailable right now.</p>'; }
+  }
+
   document.getElementById('usekey').onclick=e=>{
     e.preventDefault();
     document.getElementById('kf').style.display='';
