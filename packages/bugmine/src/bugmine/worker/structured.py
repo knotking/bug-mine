@@ -24,6 +24,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from bugmine.catalog import IncomingBug, defect_identity
 from bugmine.models import BugType, SubjectDomain
@@ -55,22 +56,34 @@ class Marker:
 # "considered non-breaking changes", and matching that phrase files a breaking-change record
 # against a release whose text says the opposite.
 MARKERS: list[Marker] = [
-    Marker(re.compile(r"(?<!non-)(?<!non )\bbreaking[ -]changes?\b", re.I),
-           BugType.BREAKING_CHANGE, Direction.INTRODUCED),
-    Marker(re.compile(r"(?<!non-)(?<!non )\bbackwards?[ -]incompatible\b", re.I),
-           BugType.BREAKING_CHANGE, Direction.INTRODUCED),
-    Marker(re.compile(r"\bdeprecat(e|es|ed|ing|ion|ions)\b", re.I),
-           BugType.DEPRECATION, Direction.INTRODUCED),
-    Marker(re.compile(r"\b(drops?|dropped|removes?|removed)\b.{0,40}\bsupport\b", re.I),
-           BugType.BREAKING_CHANGE, Direction.INTRODUCED),
-    Marker(re.compile(r"\bsecurity (fix|advisory|release|patch)\b", re.I),
-           BugType.SECURITY, Direction.FIXED),
-    Marker(re.compile(r"\bCVE-\d{4}-\d+", re.I),
-           BugType.SECURITY, Direction.FIXED),
-    Marker(re.compile(r"\bperformance regressions?\b", re.I),
-           BugType.PERFORMANCE, None),
-    Marker(re.compile(r"\bregressions?\b", re.I),
-           BugType.FUNCTIONAL, None),
+    Marker(
+        re.compile(r"(?<!non-)(?<!non )\bbreaking[ -]changes?\b", re.I),
+        BugType.BREAKING_CHANGE,
+        Direction.INTRODUCED,
+    ),
+    Marker(
+        re.compile(r"(?<!non-)(?<!non )\bbackwards?[ -]incompatible\b", re.I),
+        BugType.BREAKING_CHANGE,
+        Direction.INTRODUCED,
+    ),
+    Marker(
+        re.compile(r"\bdeprecat(e|es|ed|ing|ion|ions)\b", re.I),
+        BugType.DEPRECATION,
+        Direction.INTRODUCED,
+    ),
+    Marker(
+        re.compile(r"\b(drops?|dropped|removes?|removed)\b.{0,40}\bsupport\b", re.I),
+        BugType.BREAKING_CHANGE,
+        Direction.INTRODUCED,
+    ),
+    Marker(
+        re.compile(r"\bsecurity (fix|advisory|release|patch)\b", re.I),
+        BugType.SECURITY,
+        Direction.FIXED,
+    ),
+    Marker(re.compile(r"\bCVE-\d{4}-\d+", re.I), BugType.SECURITY, Direction.FIXED),
+    Marker(re.compile(r"\bperformance regressions?\b", re.I), BugType.PERFORMANCE, None),
+    Marker(re.compile(r"\bregressions?\b", re.I), BugType.FUNCTIONAL, None),
 ]
 
 # Section headings that state the direction for everything beneath them.
@@ -128,11 +141,13 @@ def _version_from(tag: str, name: str) -> str | None:
 # is the single most common shape in release notes, and each bullet under it is a breaking
 # change even when the bullet's own wording carries no marker.
 _HEADING_CLASS: list[tuple[re.Pattern[str], BugType, Direction]] = [
-    (re.compile(r"\b(breaking|incompatible)\b", re.I),
-     BugType.BREAKING_CHANGE, Direction.INTRODUCED),
+    (
+        re.compile(r"\b(breaking|incompatible)\b", re.I),
+        BugType.BREAKING_CHANGE,
+        Direction.INTRODUCED,
+    ),
     (re.compile(r"\bdeprecat\w*\b", re.I), BugType.DEPRECATION, Direction.INTRODUCED),
-    (re.compile(r"\bremovals?\b|\bremoved\b", re.I),
-     BugType.BREAKING_CHANGE, Direction.INTRODUCED),
+    (re.compile(r"\bremovals?\b|\bremoved\b", re.I), BugType.BREAKING_CHANGE, Direction.INTRODUCED),
     (re.compile(r"\bsecurity\b", re.I), BugType.SECURITY, Direction.FIXED),
 ]
 
@@ -381,3 +396,189 @@ def extract_github_releases(
     return StructuredResult(
         bugs=bugs, releases_seen=len(payload), skipped=skipped, unresolved=unresolved
     )
+
+
+# ---------------------------------------------------------------------------
+# Atlassian Statuspage
+# ---------------------------------------------------------------------------
+
+STATUSPAGE_DURABLE = {
+    BugType.DEPRECATION: (
+        "deprecat",
+        "end of life",
+        "end-of-life",
+        "no longer supported",
+        "no longer support",
+        "sunset",
+        "will be removed",
+        "has been removed",
+        "retiring",
+        "retirement",
+    ),
+    BugType.BREAKING_CHANGE: (
+        "breaking change",
+        "backwards incompatible",
+        "backward incompatible",
+        "no longer accept",
+        "migration required",
+        "must migrate",
+        "action required",
+        "permanently",
+    ),
+}
+"""The rule deciding which incidents become records — open decision S1, decided here.
+
+**An outage is not a bug record.** A three-hour regional incident that resolves and never
+recurs is not a defect a design will hit, and ingesting every incident would fill the
+`saas_platform` domain with resolved noise and make it the least trustworthy one in the
+catalog. What belongs is the durable subset: a change announced through the status page that
+outlives the incident.
+
+So a marker is required, and it is deliberately narrow. Transient vocabulary — "elevated
+latency", "degraded performance", "investigating" — is absent on purpose: those describe a
+condition that ended, and the corresponding record would assert a defect that no longer exists.
+Recall is traded away for the property that a record in this domain means something.
+"""
+
+MAX_RECORDS_PER_FEED = 25
+"""One vendor's incident history must not dominate the domain. `incidents.json` returns the
+most recent 50 by default, so this bounds a single fetch to half of that."""
+
+
+def looks_like_statuspage(document: str) -> bool:
+    """Recognise a Statuspage incidents feed by content rather than by URL.
+
+    By content because the URL is not evidence: a vendor can host Statuspage on its own domain,
+    and a proxy can serve anything from a path that looks right.
+    """
+    try:
+        payload = json.loads(document)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    page = payload.get("page")
+    incidents = payload.get("incidents")
+    if not isinstance(page, dict) or not isinstance(incidents, list):
+        return False
+    # `page.id` plus an incidents list is the shape; `summary.json` has it too, which is
+    # deliberate — it is recognised, and then yields nothing, because it carries only
+    # *currently active* incidents and is empty whenever the vendor is healthy.
+    return "id" in page
+
+
+def _statuspage_text(incident: dict[str, Any]) -> str:
+    parts = [str(incident.get("name") or "")]
+    for update in incident.get("incident_updates") or []:
+        if isinstance(update, dict):
+            parts.append(str(update.get("body") or ""))
+    return " ".join(parts).lower()
+
+
+STATUSPAGE_TRANSIENT = (
+    "outage",
+    "degraded",
+    "degradation",
+    "elevated",
+    "temporary",
+    "temporarily",
+    "intermittent",
+    "connectivity",
+    "failures",
+    "downtime",
+    "unavailable",
+    "investigating",
+    "latency",
+)
+"""Vocabulary that vetoes a durable-change match, and it is the half that carries the weight.
+
+Measured against ten vendors and ~420 settled incidents, the durable markers alone matched
+three, and two of those were transient incidents that merely *mentioned* a durable word — npm's
+"Failures publishing, deprecating, and installing packages" is an outage of the deprecate
+command, not a deprecation. A marker anywhere in a long update trail is weak evidence; an
+operational-incident word beside it is strong evidence against.
+"""
+
+
+def _statuspage_type(text: str) -> BugType | None:
+    if any(word in text for word in STATUSPAGE_TRANSIENT):
+        return None
+    for bug_type, markers in STATUSPAGE_DURABLE.items():
+        if any(marker in text for marker in markers):
+            return bug_type
+    return None
+
+
+def extract_statuspage(
+    document: str,
+    *,
+    component_ref: str,
+    subject_domain: SubjectDomain = SubjectDomain.SAAS_PLATFORM,
+    ecosystem: str | None = None,
+    artifact_uri: str | None = None,
+) -> StructuredResult:
+    """Read durable changes out of a Statuspage incidents feed.
+
+    Applicability is a `TimeWindow`, which is the only variant that fits: a SaaS vendor ships
+    the caller no version, so a change is bounded by dates and nothing else.
+    """
+    payload = json.loads(document)
+    incidents = payload.get("incidents") or []
+
+    bugs: list[IncomingBug] = []
+    skipped = 0
+
+    for incident in incidents:
+        if not isinstance(incident, dict):
+            skipped += 1
+            continue
+
+        # Only settled incidents. An open one is written before anyone knows what changed, and
+        # the record would have to be corrected by the same pipeline that created it (S2).
+        if incident.get("status") not in {"resolved", "postmortem"}:
+            skipped += 1
+            continue
+
+        bug_type = _statuspage_type(_statuspage_text(incident))
+        if bug_type is None:
+            skipped += 1
+            continue
+
+        started = incident.get("started_at") or incident.get("created_at")
+        if not started:
+            skipped += 1
+            continue
+
+        # `observed_until` stays open even though the incident is closed. The incident ended;
+        # the change it announced did not. Closing the window at `resolved_at` would produce a
+        # record that matches only inside a window already in the past — that is, never.
+        applicability = {
+            "kind": "time_window",
+            "observed_from": str(started),
+            "observed_until": None,
+        }
+
+        title = _clean_title(str(incident.get("name") or "")) or "Announced change"
+        updates = incident.get("incident_updates") or []
+        body = ""
+        if updates and isinstance(updates[-1], dict):
+            body = _first_sentence(str(updates[-1].get("body") or ""))
+
+        bugs.append(
+            IncomingBug(
+                subject_domain=subject_domain,
+                component_ref=component_ref,
+                ecosystem=ecosystem,
+                bug_type=bug_type,
+                applicability=applicability,
+                title=title,
+                description=body or None,
+                evidence_url=incident.get("shortlink"),
+                identity_key=f"statuspage-{incident.get('page_id')}-{incident.get('id')}",
+                raw_artifact_uri=artifact_uri,
+            )
+        )
+        if len(bugs) >= MAX_RECORDS_PER_FEED:
+            break
+
+    return StructuredResult(bugs=bugs, releases_seen=len(incidents), skipped=skipped, unresolved=0)

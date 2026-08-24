@@ -1,5 +1,5 @@
 {
-  "note": "SaaS status sources for the saas_platform domain. Every feed_url below returned HTTP 200 with the content type its feed_kind implies, probed 2026-08-24. Entries under `unresolved` have a live status page but no feed this probe could find \u2014 they need a manual check or the model path.",
+  "note": "SaaS status sources for the saas_platform domain. Probed 2026-08-24. For Statuspage vendors the feed is /api/v2/incidents.json, which carries incident history including resolved ones; /api/v2/summary.json returns only *currently active* incidents and is empty for a healthy service, so it is the wrong endpoint to ingest from. Entries under `unresolved` have a live status page but no feed this probe could find.",
   "probed_at": "2026-08-24",
   "records": [
     {
@@ -35,229 +35,229 @@
     {
       "component_ref": "adyen",
       "status_page": "https://status.adyen.com/",
-      "feed_url": "https://status.adyen.com/api/v2/summary.json",
+      "feed_url": "https://status.adyen.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "airtable",
       "status_page": "https://status.airtable.com/",
-      "feed_url": "https://status.airtable.com/api/v2/summary.json",
+      "feed_url": "https://status.airtable.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "atlassian",
       "status_page": "https://status.atlassian.com/",
-      "feed_url": "https://status.atlassian.com/api/v2/summary.json",
+      "feed_url": "https://status.atlassian.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "box",
       "status_page": "https://status.box.com/",
-      "feed_url": "https://status.box.com/api/v2/summary.json",
+      "feed_url": "https://status.box.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "circleci",
       "status_page": "https://status.circleci.com/",
-      "feed_url": "https://status.circleci.com/api/v2/summary.json",
+      "feed_url": "https://status.circleci.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "cloudflare",
       "status_page": "https://www.cloudflarestatus.com/",
-      "feed_url": "https://www.cloudflarestatus.com/api/v2/summary.json",
+      "feed_url": "https://www.cloudflarestatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "confluent",
       "status_page": "https://status.confluent.cloud/",
-      "feed_url": "https://status.confluent.cloud/api/v2/summary.json",
+      "feed_url": "https://status.confluent.cloud/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "datadog",
       "status_page": "https://status.datadoghq.com/",
-      "feed_url": "https://status.datadoghq.com/api/v2/summary.json",
+      "feed_url": "https://status.datadoghq.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "digitalocean",
       "status_page": "https://status.digitalocean.com/",
-      "feed_url": "https://status.digitalocean.com/api/v2/summary.json",
+      "feed_url": "https://status.digitalocean.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "discord",
       "status_page": "https://discordstatus.com/",
-      "feed_url": "https://discordstatus.com/api/v2/summary.json",
+      "feed_url": "https://discordstatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "dropbox",
       "status_page": "https://status.dropbox.com/",
-      "feed_url": "https://status.dropbox.com/api/v2/summary.json",
+      "feed_url": "https://status.dropbox.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "elastic",
       "status_page": "https://status.elastic.co/",
-      "feed_url": "https://status.elastic.co/api/v2/summary.json",
+      "feed_url": "https://status.elastic.co/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "figma",
       "status_page": "https://status.figma.com/",
-      "feed_url": "https://status.figma.com/api/v2/summary.json",
+      "feed_url": "https://status.figma.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "flyio",
       "status_page": "https://status.flyio.net/",
-      "feed_url": "https://status.flyio.net/api/v2/summary.json",
+      "feed_url": "https://status.flyio.net/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "github",
       "status_page": "https://www.githubstatus.com/",
-      "feed_url": "https://www.githubstatus.com/api/v2/summary.json",
+      "feed_url": "https://www.githubstatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "hubspot",
       "status_page": "https://status.hubspot.com/",
-      "feed_url": "https://status.hubspot.com/api/v2/summary.json",
+      "feed_url": "https://status.hubspot.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "jfrog",
       "status_page": "https://status.jfrog.io/",
-      "feed_url": "https://status.jfrog.io/api/v2/summary.json",
+      "feed_url": "https://status.jfrog.io/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "linode",
       "status_page": "https://status.linode.com/",
-      "feed_url": "https://status.linode.com/api/v2/summary.json",
+      "feed_url": "https://status.linode.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "mailgun",
       "status_page": "https://status.mailgun.com/",
-      "feed_url": "https://status.mailgun.com/api/v2/summary.json",
+      "feed_url": "https://status.mailgun.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "mongodb",
       "status_page": "https://status.mongodb.com/",
-      "feed_url": "https://status.mongodb.com/api/v2/summary.json",
+      "feed_url": "https://status.mongodb.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "netlify",
       "status_page": "https://www.netlifystatus.com/",
-      "feed_url": "https://www.netlifystatus.com/api/v2/summary.json",
+      "feed_url": "https://www.netlifystatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "newrelic",
       "status_page": "https://status.newrelic.com/",
-      "feed_url": "https://status.newrelic.com/api/v2/summary.json",
+      "feed_url": "https://status.newrelic.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "npm",
       "status_page": "https://status.npmjs.org/",
-      "feed_url": "https://status.npmjs.org/api/v2/summary.json",
+      "feed_url": "https://status.npmjs.org/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "openai",
       "status_page": "https://status.openai.com/",
-      "feed_url": "https://status.openai.com/api/v2/summary.json",
+      "feed_url": "https://status.openai.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "plaid",
       "status_page": "https://status.plaid.com/",
-      "feed_url": "https://status.plaid.com/api/v2/summary.json",
+      "feed_url": "https://status.plaid.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "planetscale",
       "status_page": "https://www.planetscalestatus.com/",
-      "feed_url": "https://www.planetscalestatus.com/api/v2/summary.json",
+      "feed_url": "https://www.planetscalestatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "pypi",
       "status_page": "https://status.python.org/",
-      "feed_url": "https://status.python.org/api/v2/summary.json",
+      "feed_url": "https://status.python.org/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "redis",
       "status_page": "https://status.redis.io/",
-      "feed_url": "https://status.redis.io/api/v2/summary.json",
+      "feed_url": "https://status.redis.io/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "render",
       "status_page": "https://status.render.com/",
-      "feed_url": "https://status.render.com/api/v2/summary.json",
+      "feed_url": "https://status.render.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "replicate",
       "status_page": "https://www.replicatestatus.com/",
-      "feed_url": "https://www.replicatestatus.com/api/v2/summary.json",
+      "feed_url": "https://www.replicatestatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "sendgrid",
       "status_page": "https://status.sendgrid.com/",
-      "feed_url": "https://status.sendgrid.com/api/v2/summary.json",
+      "feed_url": "https://status.sendgrid.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "sentry",
       "status_page": "https://status.sentry.io/",
-      "feed_url": "https://status.sentry.io/api/v2/summary.json",
+      "feed_url": "https://status.sentry.io/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "shopify",
       "status_page": "https://www.shopifystatus.com/",
-      "feed_url": "https://www.shopifystatus.com/api/v2/summary.json",
+      "feed_url": "https://www.shopifystatus.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "snowflake",
       "status_page": "https://status.snowflake.com/",
-      "feed_url": "https://status.snowflake.com/api/v2/summary.json",
+      "feed_url": "https://status.snowflake.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "squareup",
       "status_page": "https://www.issquareup.com/",
-      "feed_url": "https://www.issquareup.com/api/v2/summary.json",
+      "feed_url": "https://www.issquareup.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "supabase",
       "status_page": "https://status.supabase.com/",
-      "feed_url": "https://status.supabase.com/api/v2/summary.json",
+      "feed_url": "https://status.supabase.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "twilio",
       "status_page": "https://status.twilio.com/",
-      "feed_url": "https://status.twilio.com/api/v2/summary.json",
+      "feed_url": "https://status.twilio.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {
       "component_ref": "vercel",
       "status_page": "https://www.vercel-status.com/",
-      "feed_url": "https://www.vercel-status.com/api/v2/summary.json",
+      "feed_url": "https://www.vercel-status.com/api/v2/incidents.json",
       "feed_kind": "statuspage-v2"
     },
     {

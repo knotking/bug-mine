@@ -10,7 +10,12 @@ from __future__ import annotations
 import json
 
 from bugmine.models import BugType
-from bugmine.worker.structured import extract_github_releases, looks_like_github_releases
+from bugmine.worker.structured import (
+    extract_github_releases,
+    extract_statuspage,
+    looks_like_github_releases,
+    looks_like_statuspage,
+)
 
 
 def _feed(*releases: dict) -> str:
@@ -267,3 +272,99 @@ class TestWrappedProse:
             component_ref="pydantic",
         )
         assert len({b.identity_key for b in r.bugs}) == len(r.bugs) == 2
+
+
+# ---------------------------------------------------------------------------
+# Statuspage
+# ---------------------------------------------------------------------------
+
+
+def _incident(**kw) -> dict:
+    base = {
+        "id": "abc123",
+        "page_id": "pg1",
+        "name": "Scheduled removal of TLS 1.1 support",
+        "status": "resolved",
+        "impact": "minor",
+        "started_at": "2026-06-01T10:00:00.000Z",
+        "resolved_at": "2026-06-01T12:00:00.000Z",
+        "shortlink": "https://stspg.io/abc123",
+        "incident_updates": [{"body": "TLS 1.1 will be removed on 1 July.", "status": "resolved"}],
+    }
+    base.update(kw)
+    return base
+
+
+def _feed_sp(*incidents: dict) -> str:
+    return json.dumps({"page": {"id": "pg1", "name": "Vendor"}, "incidents": list(incidents)})
+
+
+class TestStatuspageRecognition:
+    def test_an_incidents_feed_is_recognised(self) -> None:
+        assert looks_like_statuspage(_feed_sp(_incident()))
+
+    def test_a_releases_feed_is_not(self) -> None:
+        assert not looks_like_statuspage(_feed({}))
+
+    def test_prose_is_not(self) -> None:
+        assert not looks_like_statuspage("All systems operational")
+
+
+class TestStatuspageDurability:
+    """Which incidents become records — open decision S1, decided in the parser.
+
+    Measured against 551 settled incidents across twelve vendors, this rule produced zero
+    records, because status pages carry transient operational state rather than durable change
+    announcements. These tests pin the rule so that result stays intentional rather than
+    becoming a silent regression nobody notices.
+    """
+
+    def test_a_durable_announcement_is_recorded(self) -> None:
+        r = extract_statuspage(_feed_sp(_incident()), component_ref="vendor")
+        assert len(r.bugs) == 1
+        bug = r.bugs[0]
+        assert bug.bug_type is BugType.DEPRECATION
+        assert bug.evidence_url == "https://stspg.io/abc123"
+        assert bug.identity_key == "statuspage-pg1-abc123"
+
+    def test_the_window_stays_open_after_the_incident_closes(self) -> None:
+        """The incident ended; the change it announced did not. A window closed at
+        `resolved_at` matches only inside a period already past — that is, never."""
+        r = extract_statuspage(_feed_sp(_incident()), component_ref="vendor")
+        assert r.bugs[0].applicability == {
+            "kind": "time_window",
+            "observed_from": "2026-06-01T10:00:00.000Z",
+            "observed_until": None,
+        }
+
+    def test_an_ordinary_outage_is_skipped(self) -> None:
+        incident = _incident(
+            name="Elevated error rates in the API",
+            incident_updates=[
+                {"body": "We are investigating elevated errors.", "status": "resolved"}
+            ],
+        )
+        r = extract_statuspage(_feed_sp(incident), component_ref="vendor")
+        assert r.bugs == []
+        assert r.skipped == 1
+
+    def test_an_outage_that_merely_mentions_a_durable_word_is_skipped(self) -> None:
+        """npm's real incident: "Failures publishing, deprecating, and installing packages" is
+        an outage of the deprecate command, not a deprecation. Without the transient veto this
+        was one of two false positives in the whole measured corpus."""
+        incident = _incident(name="Failures publishing, deprecating, and installing packages")
+        r = extract_statuspage(_feed_sp(incident), component_ref="vendor")
+        assert r.bugs == []
+
+    def test_an_unresolved_incident_is_skipped(self) -> None:
+        """Writing before the vendor knows what changed means the record has to be corrected
+        by the same pipeline that created it."""
+        r = extract_statuspage(_feed_sp(_incident(status="investigating")), component_ref="v")
+        assert r.bugs == []
+
+    def test_a_summary_feed_yields_nothing_rather_than_erroring(self) -> None:
+        """`summary.json` has the same shape and carries only *active* incidents, so it is
+        empty whenever the vendor is healthy — verified against GitHub, which returned 0."""
+        doc = json.dumps({"page": {"id": "pg1"}, "incidents": [], "components": []})
+        assert looks_like_statuspage(doc)
+        assert extract_statuspage(doc, component_ref="vendor").bugs == []

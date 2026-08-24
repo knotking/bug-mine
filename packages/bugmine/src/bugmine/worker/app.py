@@ -452,12 +452,19 @@ def do_extract(body: ExtractRequest, request: Request) -> dict[str, Any]:
         # A GitHub releases feed states its versions rather than implying them, so a parser is
         # both cheaper and more accurate than a model. The model is for prose changelogs where
         # the defect has to be read out of a sentence.
+        is_statuspage = structured.looks_like_statuspage(document)
         use_structured = body.mode == "structured" or (
-            body.mode == "auto" and structured.looks_like_github_releases(document)
+            body.mode == "auto"
+            and (structured.looks_like_github_releases(document) or is_statuspage)
         )
 
         if use_structured:
-            parsed = structured.extract_github_releases(
+            reader = (
+                structured.extract_statuspage
+                if is_statuspage
+                else structured.extract_github_releases
+            )
+            parsed = reader(
                 document,
                 component_ref=body.component_ref or "unknown",
                 subject_domain=body.subject_domain,

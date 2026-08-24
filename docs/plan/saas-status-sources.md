@@ -13,8 +13,7 @@
 that a status page is prose and therefore costs tokens. **That was wrong for most of it.**
 
 Of 59 vendors probed, **46 expose a machine-readable feed** — 38 of them through Atlassian
-Statuspage's `/api/v2/summary.json`, which returns incidents, components and impact as
-structured JSON. Statuspage is close to a monopoly in this category, and one parser reads all
+Statuspage's `/api/v2/incidents.json`, which returns incident history as structured JSON. Statuspage is close to a monopoly in this category, and one parser reads all
 38. The three hyperscalers each publish their own feed, and a handful more publish Atom, RSS or
 a bespoke JSON API.
 
@@ -25,6 +24,13 @@ status page with no feed behind it.
 Every URL in this document returned HTTP 200 with the content type its kind implies, probed on
 2026-08-24. None of them are recalled from memory — a hallucinated status URL fails by silently
 monitoring nothing, which is the failure mode this catalog exists to argue against.
+
+**Use `incidents.json`, not `summary.json`.** Verified against GitHub's page on 2026-08-24:
+`summary.json` returned **0 incidents** because nothing was wrong at the time — it reports only
+*currently active* incidents. `incidents.json` returned 50, all resolved, each with
+`started_at`, `resolved_at`, `impact`, `status` and the full `incident_updates` trail. A feed
+that is empty whenever the vendor is healthy would have looked like a working integration that
+never found anything.
 
 ## What a status feed is worth to the catalog
 
@@ -44,44 +50,44 @@ noise and make the SaaS domain the least trustworthy one in it.
 
 | Component | Kind | Feed |
 | --- | --- | --- |
-| `adyen` | Statuspage v2 JSON | `https://status.adyen.com/api/v2/summary.json` |
-| `airtable` | Statuspage v2 JSON | `https://status.airtable.com/api/v2/summary.json` |
-| `atlassian` | Statuspage v2 JSON | `https://status.atlassian.com/api/v2/summary.json` |
-| `box` | Statuspage v2 JSON | `https://status.box.com/api/v2/summary.json` |
-| `circleci` | Statuspage v2 JSON | `https://status.circleci.com/api/v2/summary.json` |
-| `cloudflare` | Statuspage v2 JSON | `https://www.cloudflarestatus.com/api/v2/summary.json` |
-| `confluent` | Statuspage v2 JSON | `https://status.confluent.cloud/api/v2/summary.json` |
-| `datadog` | Statuspage v2 JSON | `https://status.datadoghq.com/api/v2/summary.json` |
-| `digitalocean` | Statuspage v2 JSON | `https://status.digitalocean.com/api/v2/summary.json` |
-| `discord` | Statuspage v2 JSON | `https://discordstatus.com/api/v2/summary.json` |
-| `dropbox` | Statuspage v2 JSON | `https://status.dropbox.com/api/v2/summary.json` |
-| `elastic` | Statuspage v2 JSON | `https://status.elastic.co/api/v2/summary.json` |
-| `figma` | Statuspage v2 JSON | `https://status.figma.com/api/v2/summary.json` |
-| `flyio` | Statuspage v2 JSON | `https://status.flyio.net/api/v2/summary.json` |
-| `github` | Statuspage v2 JSON | `https://www.githubstatus.com/api/v2/summary.json` |
-| `hubspot` | Statuspage v2 JSON | `https://status.hubspot.com/api/v2/summary.json` |
-| `jfrog` | Statuspage v2 JSON | `https://status.jfrog.io/api/v2/summary.json` |
-| `linode` | Statuspage v2 JSON | `https://status.linode.com/api/v2/summary.json` |
-| `mailgun` | Statuspage v2 JSON | `https://status.mailgun.com/api/v2/summary.json` |
-| `mongodb` | Statuspage v2 JSON | `https://status.mongodb.com/api/v2/summary.json` |
-| `netlify` | Statuspage v2 JSON | `https://www.netlifystatus.com/api/v2/summary.json` |
-| `newrelic` | Statuspage v2 JSON | `https://status.newrelic.com/api/v2/summary.json` |
-| `npm` | Statuspage v2 JSON | `https://status.npmjs.org/api/v2/summary.json` |
-| `openai` | Statuspage v2 JSON | `https://status.openai.com/api/v2/summary.json` |
-| `plaid` | Statuspage v2 JSON | `https://status.plaid.com/api/v2/summary.json` |
-| `planetscale` | Statuspage v2 JSON | `https://www.planetscalestatus.com/api/v2/summary.json` |
-| `pypi` | Statuspage v2 JSON | `https://status.python.org/api/v2/summary.json` |
-| `redis` | Statuspage v2 JSON | `https://status.redis.io/api/v2/summary.json` |
-| `render` | Statuspage v2 JSON | `https://status.render.com/api/v2/summary.json` |
-| `replicate` | Statuspage v2 JSON | `https://www.replicatestatus.com/api/v2/summary.json` |
-| `sendgrid` | Statuspage v2 JSON | `https://status.sendgrid.com/api/v2/summary.json` |
-| `sentry` | Statuspage v2 JSON | `https://status.sentry.io/api/v2/summary.json` |
-| `shopify` | Statuspage v2 JSON | `https://www.shopifystatus.com/api/v2/summary.json` |
-| `snowflake` | Statuspage v2 JSON | `https://status.snowflake.com/api/v2/summary.json` |
-| `squareup` | Statuspage v2 JSON | `https://www.issquareup.com/api/v2/summary.json` |
-| `supabase` | Statuspage v2 JSON | `https://status.supabase.com/api/v2/summary.json` |
-| `twilio` | Statuspage v2 JSON | `https://status.twilio.com/api/v2/summary.json` |
-| `vercel` | Statuspage v2 JSON | `https://www.vercel-status.com/api/v2/summary.json` |
+| `adyen` | Statuspage v2 JSON | `https://status.adyen.com/api/v2/incidents.json` |
+| `airtable` | Statuspage v2 JSON | `https://status.airtable.com/api/v2/incidents.json` |
+| `atlassian` | Statuspage v2 JSON | `https://status.atlassian.com/api/v2/incidents.json` |
+| `box` | Statuspage v2 JSON | `https://status.box.com/api/v2/incidents.json` |
+| `circleci` | Statuspage v2 JSON | `https://status.circleci.com/api/v2/incidents.json` |
+| `cloudflare` | Statuspage v2 JSON | `https://www.cloudflarestatus.com/api/v2/incidents.json` |
+| `confluent` | Statuspage v2 JSON | `https://status.confluent.cloud/api/v2/incidents.json` |
+| `datadog` | Statuspage v2 JSON | `https://status.datadoghq.com/api/v2/incidents.json` |
+| `digitalocean` | Statuspage v2 JSON | `https://status.digitalocean.com/api/v2/incidents.json` |
+| `discord` | Statuspage v2 JSON | `https://discordstatus.com/api/v2/incidents.json` |
+| `dropbox` | Statuspage v2 JSON | `https://status.dropbox.com/api/v2/incidents.json` |
+| `elastic` | Statuspage v2 JSON | `https://status.elastic.co/api/v2/incidents.json` |
+| `figma` | Statuspage v2 JSON | `https://status.figma.com/api/v2/incidents.json` |
+| `flyio` | Statuspage v2 JSON | `https://status.flyio.net/api/v2/incidents.json` |
+| `github` | Statuspage v2 JSON | `https://www.githubstatus.com/api/v2/incidents.json` |
+| `hubspot` | Statuspage v2 JSON | `https://status.hubspot.com/api/v2/incidents.json` |
+| `jfrog` | Statuspage v2 JSON | `https://status.jfrog.io/api/v2/incidents.json` |
+| `linode` | Statuspage v2 JSON | `https://status.linode.com/api/v2/incidents.json` |
+| `mailgun` | Statuspage v2 JSON | `https://status.mailgun.com/api/v2/incidents.json` |
+| `mongodb` | Statuspage v2 JSON | `https://status.mongodb.com/api/v2/incidents.json` |
+| `netlify` | Statuspage v2 JSON | `https://www.netlifystatus.com/api/v2/incidents.json` |
+| `newrelic` | Statuspage v2 JSON | `https://status.newrelic.com/api/v2/incidents.json` |
+| `npm` | Statuspage v2 JSON | `https://status.npmjs.org/api/v2/incidents.json` |
+| `openai` | Statuspage v2 JSON | `https://status.openai.com/api/v2/incidents.json` |
+| `plaid` | Statuspage v2 JSON | `https://status.plaid.com/api/v2/incidents.json` |
+| `planetscale` | Statuspage v2 JSON | `https://www.planetscalestatus.com/api/v2/incidents.json` |
+| `pypi` | Statuspage v2 JSON | `https://status.python.org/api/v2/incidents.json` |
+| `redis` | Statuspage v2 JSON | `https://status.redis.io/api/v2/incidents.json` |
+| `render` | Statuspage v2 JSON | `https://status.render.com/api/v2/incidents.json` |
+| `replicate` | Statuspage v2 JSON | `https://www.replicatestatus.com/api/v2/incidents.json` |
+| `sendgrid` | Statuspage v2 JSON | `https://status.sendgrid.com/api/v2/incidents.json` |
+| `sentry` | Statuspage v2 JSON | `https://status.sentry.io/api/v2/incidents.json` |
+| `shopify` | Statuspage v2 JSON | `https://www.shopifystatus.com/api/v2/incidents.json` |
+| `snowflake` | Statuspage v2 JSON | `https://status.snowflake.com/api/v2/incidents.json` |
+| `squareup` | Statuspage v2 JSON | `https://www.issquareup.com/api/v2/incidents.json` |
+| `supabase` | Statuspage v2 JSON | `https://status.supabase.com/api/v2/incidents.json` |
+| `twilio` | Statuspage v2 JSON | `https://status.twilio.com/api/v2/incidents.json` |
+| `vercel` | Statuspage v2 JSON | `https://www.vercel-status.com/api/v2/incidents.json` |
 | `google-cloud` | Vendor JSON | `https://status.cloud.google.com/incidents.json` |
 | `heroku` | Vendor JSON | `https://status.heroku.com/api/v4/current-status` |
 | `slack` | Vendor JSON | `https://slack-status.com/api/v2.0.0/current` |
@@ -113,11 +119,55 @@ answered the API path with HTML rather than JSON, and would be free if the right
 | `stripe` | https://status.stripe.com/ |
 | `zendesk` | https://status.zendesk.com/ |
 
+## Measured: these feeds carry almost nothing the catalog wants
+
+The parser is built (`worker/structured.py`, `looks_like_statuspage` / `extract_statuspage`)
+and wired into the extract worker's auto-detection beside the GitHub releases reader. It was
+then run against real feeds, and the result is the most useful thing in this document.
+
+**551 settled incidents across twelve vendors produced zero records.**
+
+| | |
+| --- | :-: |
+| Vendors sampled | 12 |
+| Settled incidents read | 551 |
+| Durable-change records produced | **0** |
+
+The first pass, with durable markers only, matched three — and two were false positives. npm's
+*"Failures publishing, deprecating, and installing packages"* is an outage of the deprecate
+command, not a deprecation; MongoDB's *"Temporary failures"* matched a word in an update body.
+Adding a transient veto (`outage`, `degraded`, `elevated`, `temporary`, `latency`, …) removed
+both, and removed the third with them.
+
+### What that means, and what it invalidates
+
+**Status pages do not announce durable changes.** They carry transient operational state, by
+design and by the vendors' own convention. Deprecations, breaking changes and behaviour shifts
+are announced in changelogs, API-version pages, blogs and email — not on the status page.
+
+So the correction this document made to [`ingestion-sources.md`](ingestion-sources.md) was half
+right. The feeds *are* structured and free, and the parser costs nothing to run. But moving the
+`saas_platform` domain up the order on the strength of them was wrong: they are a cheap source
+of almost no catalog records. The original judgement — that SaaS durable changes need the model
+path over prose changelogs — stands, against different sources than the ones listed here.
+
+### Where these 46 feeds do belong
+
+BugMine's scope is a catalog of known bugs **and live outages**. These feeds are an excellent
+source of the second and a poor source of the first. A live-outage surface reading
+`incidents.json` on a short interval is a different product surface with a different data
+shape — current state, not versioned history — and it is worth building on exactly this list.
+
+The parser stays and stays wired: it costs nothing, and it catches a genuine announcement if a
+vendor ever makes one through this channel. Its expected yield is approximately zero, which is
+recorded in `tests/test_structured.py` so that an empty result is never mistaken for a broken
+integration.
+
 ## Open decisions
 
 | # | Decision |
 | --- | --- |
-| **S1** | Which incidents become records. The durable subset above needs a definition sharp enough to implement, not a judgement call per incident |
+| ~~S1~~ | **Decided and implemented.** A settled incident whose text carries a durable-change marker and no transient vocabulary. Measured yield: zero records from 551 incidents, which is the rule working rather than failing |
 | **S2** | Whether an unresolved incident enters the catalog at all, or only its postmortem does. Entering early means the record is written before anyone knows what changed |
-| **S3** | Polling interval per vendor. The sweep's rate-limit budget is already the constraint on the GitHub sources, and 46 feeds on a short interval competes with it |
+| **S3** | Polling interval per vendor — now a question for the live-outage surface rather than the catalog, since the catalog yield is zero |
 | **S4** | Whether component refs match how a customer names the dependency (`gcp` versus `google-cloud` versus `Google Cloud Platform`), which is the alias registry's problem and is worse here than anywhere else |
