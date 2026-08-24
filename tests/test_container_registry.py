@@ -10,6 +10,7 @@ from __future__ import annotations
 import gzip
 import io
 import tarfile
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -135,7 +136,7 @@ class TestResolution:
 
         return handler
 
-    MANIFEST = {
+    MANIFEST: ClassVar[dict[str, object]] = {
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
         "config": {"digest": CONFIG_DIGEST},
         "layers": [{"digest": LAYER_DIGEST}],
