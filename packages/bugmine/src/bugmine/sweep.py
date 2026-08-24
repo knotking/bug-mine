@@ -105,6 +105,33 @@ def record_failure(session: Session, url: str, *, tenant_id=None) -> None:  # ty
         source.consecutive_failures += 1
 
 
+def ecosystem_contradicts_domain(subject_domain, ecosystem: str | None) -> str | None:  # type: ignore[no-untyped-def]
+    """Reject a source whose ecosystem and subject domain disagree.
+
+    `check` and `scan` derive the subject domain *from the ecosystem the caller declared*
+    (`ECOSYSTEM_DOMAIN`), then retrieve on the pair. So a component registered as
+    `language_runtime` under ecosystem `pypi` is queried as `repo_library` and never found —
+    the records exist, cost tokens to extract, and are structurally unreachable from the only
+    path a customer uses. 986 records for `kotlin` and `elixir` are in exactly that state.
+
+    It returns empty rather than erroring, which reads as "nothing known about this
+    component", so nothing about the failure is visible from either side. Registration is the
+    last point where the pair is stated by a human, which makes it the right place to refuse.
+    """
+    from bugmine.scan import ECOSYSTEM_DOMAIN
+
+    if ecosystem is None:
+        return None
+    implied = ECOSYSTEM_DOMAIN.get(ecosystem)
+    if implied is None or implied == subject_domain:
+        return None
+    return (
+        f"ecosystem {ecosystem!r} implies subject domain {implied.value!r}, "
+        f"but the source declares {getattr(subject_domain, 'value', subject_domain)!r}. "
+        f"Records registered this way are never retrieved."
+    )
+
+
 def add_source(
     session: Session,
     *,
@@ -118,6 +145,9 @@ def add_source(
 ) -> Source:
     if (privacy_scope is PrivacyScope.TENANT) != (tenant_id is not None):
         raise ValueError("tenant scope requires a tenant, and a tenant requires tenant scope")
+
+    if reason := ecosystem_contradicts_domain(subject_domain, ecosystem):
+        raise ValueError(reason)
 
     # Idempotent on url within a scope. Without this, re-running a source list duplicates every
     # entry in it — which happened twice, and a source registered twice is crawled twice,

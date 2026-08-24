@@ -218,6 +218,14 @@ curl -X POST "$(cd infra/terraform && terraform output -raw api_url)/v1/admin/in
   -d '{"url":"https://api.github.com/repos/OWNER/REPO/releases","component_ref":"repo","ecosystem":"pypi"}'
 ```
 
+**`ecosystem` is the registry the component ships from, not the shape of the feed.** A GitHub
+releases URL says nothing about it: `transformers` is `pypi`, `aws-cdk` is `npm`, `moby` is
+`go`, and `kotlin` is a language runtime with no package ecosystem at all. Copying `pypi` from
+this example is how 313 registered sources ended up claiming it, and `check` derives the
+subject domain *from the ecosystem the caller declares* — so a mismatched pair produces records
+no scan can ever retrieve, reported as "nothing known about this component". `add_source` now
+refuses a pair that contradicts itself, but it cannot know that `moby` is not on PyPI.
+
 Extraction is chained by the crawl worker **only when the content hash changed**, so
 re-triggering an unchanged source costs one HTTP request and no tokens.
 

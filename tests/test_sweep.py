@@ -228,3 +228,52 @@ class TestAddSourceIsIdempotent:
         with tenant_session(engine, None, commit=False) as s:
             rows = s.execute(select(Source).where(Source.url == url)).scalars().all()
         assert len(rows) == 1
+
+
+class TestEcosystemMustAgreeWithTheDomain:
+    """`check` and `scan` derive the domain from the caller's ecosystem and retrieve on the
+    pair, so a source registered with a contradictory pair produces records that are never
+    reachable — and the failure surfaces as "nothing known about this component"."""
+
+    def test_a_language_runtime_under_a_package_ecosystem_is_refused(self, engine: Engine) -> None:
+        """The live catalog has `kotlin` and `elixir` registered exactly this way, which is
+        986 records that no scan can retrieve."""
+        with tenant_session(engine, None) as s:
+            with pytest.raises(ValueError, match="never retrieved"):
+                add_source(
+                    s,
+                    url=_url(),
+                    subject_domain=SubjectDomain.LANGUAGE_RUNTIME,
+                    component_ref="kotlin",
+                    ecosystem="pypi",
+                )
+
+    def test_an_agreeing_pair_is_accepted(self, engine: Engine) -> None:
+        with tenant_session(engine, None) as s:
+            src = add_source(
+                s,
+                url=_url(),
+                subject_domain=SubjectDomain.REPO_LIBRARY,
+                component_ref="transformers",
+                ecosystem="pypi",
+            )
+            assert src.ecosystem == "pypi"
+
+    def test_no_ecosystem_is_accepted(self, engine: Engine) -> None:
+        """Domains that ship no package registry — SaaS platforms, LLM models — have none."""
+        with tenant_session(engine, None) as s:
+            src = add_source(s, url=_url(), subject_domain=SubjectDomain.LLM_MODEL)
+            assert src.ecosystem is None
+
+    def test_an_ecosystem_the_check_path_does_not_know_is_left_alone(self, engine: Engine) -> None:
+        """Refusing these would block registering a source before the ecosystem is supported,
+        which is the wrong end to fix it from."""
+        with tenant_session(engine, None) as s:
+            src = add_source(
+                s,
+                url=_url(),
+                subject_domain=SubjectDomain.LANGUAGE_RUNTIME,
+                component_ref="kotlin",
+                ecosystem="maven-central-snapshot",
+            )
+            assert src.ecosystem == "maven-central-snapshot"
