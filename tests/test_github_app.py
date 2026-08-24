@@ -134,3 +134,71 @@ class TestCheckRunHonesty:
             [{"component": "x", "title": "t", "reachable": None, "citations": []}],
         )
         assert "undetermined" in body
+
+
+class TestWebhookRoute:
+    """The route, not just the helpers. This is the surface an attacker reaches."""
+
+    def _client(self, engine, monkeypatch):  # type: ignore[no-untyped-def]
+        from fastapi.testclient import TestClient
+
+        from bugmine.api import create_app
+
+        monkeypatch.setenv("BUGMINE_GITHUB_WEBHOOK_SECRET", SECRET)
+        return TestClient(create_app(engine))
+
+    def _pr_body(self, action: str = "opened") -> bytes:
+        return json.dumps({
+            "action": action,
+            "number": 7,
+            "repository": {"full_name": "acme/app", "clone_url": "https://github.com/acme/app.git"},
+            "pull_request": {
+                "number": 7,
+                "head": {"sha": "abc", "repo": {"clone_url": "https://github.com/acme/app.git"}},
+            },
+            "installation": {"id": 999},
+        }).encode()
+
+    def test_an_unsigned_webhook_is_rejected(self, engine, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        client = self._client(engine, monkeypatch)
+        r = client.post("/v1/hooks/github", content=self._pr_body(),
+                        headers={"X-GitHub-Event": "pull_request"})
+        assert r.status_code == 401
+
+    def test_a_forged_signature_is_rejected(self, engine, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        client = self._client(engine, monkeypatch)
+        body = self._pr_body()
+        r = client.post("/v1/hooks/github", content=body, headers={
+            "X-GitHub-Event": "pull_request", "X-Hub-Signature-256": _sign(b"different")})
+        assert r.status_code == 401
+
+    def test_an_unmapped_installation_is_refused_not_provisioned(
+        self, engine, monkeypatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        """Installing the app must not create a tenant, or it becomes the self-serve signup the
+        tenancy model forbids — and a guessed mapping attributes one customer's scan to another.
+        """
+        client = self._client(engine, monkeypatch)
+        monkeypatch.delenv("BUGMINE_GITHUB_INSTALLATIONS", raising=False)
+        body = self._pr_body()
+        r = client.post("/v1/hooks/github", content=body, headers={
+            "X-GitHub-Event": "pull_request", "X-Hub-Signature-256": _sign(body)})
+        assert r.status_code == 200
+        assert r.json()["unmapped_installation"] == 999
+
+    def test_a_ping_is_answered(self, engine, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """GitHub sends this when the hook is created; failing it looks like a broken app."""
+        client = self._client(engine, monkeypatch)
+        body = b'{"zen":"hi"}'
+        r = client.post("/v1/hooks/github", content=body, headers={
+            "X-GitHub-Event": "ping", "X-Hub-Signature-256": _sign(body)})
+        assert r.status_code == 200 and r.json()["pong"] is True
+
+    def test_a_label_change_is_ignored_without_scanning(
+        self, engine, monkeypatch
+    ) -> None:  # type: ignore[no-untyped-def]
+        client = self._client(engine, monkeypatch)
+        body = self._pr_body(action="labeled")
+        r = client.post("/v1/hooks/github", content=body, headers={
+            "X-GitHub-Event": "pull_request", "X-Hub-Signature-256": _sign(body)})
+        assert r.json()["ignored"] == "labeled"

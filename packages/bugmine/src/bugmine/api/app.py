@@ -11,6 +11,7 @@ carried over from that contract:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
@@ -24,7 +25,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from bugmine import metering, tasks, urlguard
+from bugmine import github_app, metering, tasks, urlguard
 from bugmine import scan as scan_mod
 from bugmine import sweep as sweep_mod
 from bugmine.api import schemas as S
@@ -439,6 +440,100 @@ def trigger_extract(body: S.ExtractTriggerIn) -> S.JobHandleOut:
         },
     )
     return S.JobHandleOut(task=name, queued=True)
+
+
+hooks = APIRouter(prefix="/v1/hooks", tags=["hooks"])
+
+
+@hooks.post("/github")
+async def github_webhook(request: Request) -> dict[str, object]:
+    """Receive a pull request event and queue a scan of the head commit.
+
+    The signature is verified against the **raw body**, before parsing. GitHub signs the bytes
+    it sent, so anything that deserialises first has already lost the thing being verified — and
+    an unverified webhook can start a scan against any repository we can reach.
+    """
+    body = await request.body()
+    try:
+        github_app.verify_signature(
+            body,
+            request.headers.get(github_app.SIGNATURE_HEADER),
+            os.environ.get("BUGMINE_GITHUB_WEBHOOK_SECRET", ""),
+        )
+    except github_app.WebhookError as exc:
+        # 401 rather than 400: this is an authentication failure, and GitHub's delivery log
+        # showing 401 is what tells an operator the secret is wrong rather than the payload.
+        raise HTTPException(
+            status_code=401, detail={"error": {"code": exc.code, "message": str(exc)}}
+        ) from exc
+
+    event = request.headers.get(github_app.EVENT_HEADER, "")
+    if event == "ping":
+        return {"ok": True, "pong": True}
+    if event != "pull_request":
+        return {"ok": True, "ignored": event}
+
+    payload = json.loads(body)
+    pr = github_app.parse_pull_request(payload)
+    if not pr.should_scan:
+        return {"ok": True, "ignored": pr.action}
+
+    tenant_id = _tenant_for_installation(request, pr.installation_id)
+    if tenant_id is None:
+        # Refused rather than provisioned: an installation nobody has claimed must not create a
+        # tenant, or installing the app becomes a self-serve signup the tenancy model forbids.
+        return {"ok": True, "unmapped_installation": pr.installation_id}
+
+    if rejection := urlguard.check(pr.clone_url):
+        return {"ok": True, "refused": rejection.code}
+
+    with tenant_session(request.app.state.engine, tenant_id) as session:
+        job = Job(
+            tenant_id=tenant_id,
+            job_type=JobType.SCAN_FETCH,
+            state=JobState.QUEUED,
+            payload={"repo_url": pr.clone_url, "ref": pr.head_sha, "pr": pr.number},
+        )
+        session.add(job)
+        session.flush()
+        scan = Scan(job_id=job.id, tenant_id=tenant_id, repo_ref=pr.repo_full_name)
+        session.add(scan)
+        session.flush()
+        scan_id = str(scan.id)
+
+    tasks.enqueue(
+        tasks.scan_fetch_target(),
+        {
+            "repo_url": pr.clone_url,
+            "ref": pr.head_sha,
+            "tenant_id": str(tenant_id),
+            "scan_id": scan_id,
+        },
+    )
+    return {"ok": True, "scan_id": scan_id, "repo": pr.repo_full_name, "pr": pr.number}
+
+
+def _tenant_for_installation(request: Request, installation_id: int | None):  # type: ignore[no-untyped-def]
+    """Map a GitHub installation to a tenant.
+
+    Read from the environment for now, as `INSTALLATION_ID:TENANT_SLUG` pairs. A table is the
+    right home for this, but a mapping that does not exist yet must refuse rather than guess:
+    guessing would attribute one customer's scan to another.
+    """
+    if installation_id is None:
+        return None
+    mapping = os.environ.get("BUGMINE_GITHUB_INSTALLATIONS", "")
+    slugs = dict(
+        pair.split(":", 1) for pair in mapping.split(",") if ":" in pair
+    )
+    slug = slugs.get(str(installation_id))
+    if not slug:
+        return None
+    with tenant_session(request.app.state.engine, None, commit=False) as session:
+        tenant = session.execute(
+            select(Tenant).where(Tenant.slug == slug.strip())
+        ).scalars().first()
+        return tenant.id if tenant else None
 
 
 console = APIRouter(prefix="/v1", tags=["console"])
@@ -939,6 +1034,7 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     # if Firebase is ever down.
     project = os.environ.get("BUGMINE_FIREBASE_PROJECT")
     app.state.firebase = TokenVerifier(project) if project else None
+    app.include_router(hooks)
     app.include_router(public)
     app.include_router(catalog)
     app.include_router(check)
