@@ -55,6 +55,17 @@ class StackProfile:
     reported as unconfirmed rather than dropped or asserted."""
 
 
+PER_COMPONENT_LIMIT = 8
+"""Most relevant records per component.
+
+Asked about sqlalchemy 2.0.40 the catalog returns 109 matches, and every one is technically
+correct: a breaking change introduced in 0.9 with no fixed version does affect 2.0.40. But
+somebody *choosing* 2.0.40 starts after those changes rather than living through them, so
+history reads as noise and buries the handful that matter. The cap is reported, never silent —
+a truncated list that looks complete is worse than a long one.
+"""
+
+
 @dataclass
 class Advice:
     grounded: list[dict] = field(default_factory=list)
@@ -63,6 +74,9 @@ class Advice:
     """Specific missing facts (FR-27) — not a generic request for more detail."""
     not_covered: list[str] = field(default_factory=list)
     """Components with no catalog records at all. Absence of coverage, not absence of defects."""
+    omitted: dict[str, int] = field(default_factory=dict)
+    """Records held back per component by the cap. Surfaced so a short list cannot be mistaken
+    for a complete one."""
 
     @property
     def has_enough_to_say(self) -> bool:
@@ -74,7 +88,18 @@ class Advice:
         return bool(self.grounded) or not self.unknowns
 
 
-def _rank(finding: dict) -> tuple[int, int, str]:
+def _recency(finding: dict) -> float:
+    """Newer records first within a type.
+
+    A defect recorded last month is more likely to still be live than one from a release series
+    nobody runs. This is a proxy for relevance, not a measure of it — the record's own dates say
+    when we saw it, not when it stopped mattering.
+    """
+    observed = finding.get("observed_at")
+    return -observed.timestamp() if observed else 0.0
+
+
+def _rank(finding: dict) -> tuple[int, int, float, str]:
     """Rank for *this* stack, not by the bug's general severity (FR-33).
 
     A confirmed version match outranks an unconfirmed one, because the unconfirmed one may not
@@ -92,7 +117,12 @@ def _rank(finding: dict) -> tuple[int, int, str]:
         BugType.BUILD: 6,
     }
     confirmed = 0 if finding.get("version_confirmed") else 1
-    return (confirmed, order.get(finding.get("bug_type"), 9), finding.get("component", ""))
+    return (
+        confirmed,
+        order.get(finding.get("bug_type"), 9),
+        _recency(finding),
+        finding.get("component", ""),
+    )
 
 
 def advise(
@@ -156,10 +186,27 @@ def advise(
                     "match_note": match.result.reason,
                     "citations": [str(match.version.id)],
                     "evidence_url": match.version.evidence_url,
+                    "observed_at": match.version.observed_at,
                 }
             )
 
     advice.grounded.sort(key=_rank)
+
+    kept: list[dict] = []
+    seen_per_component: dict[str, int] = {}
+    for finding in advice.grounded:
+        component = finding["component"]
+        count = seen_per_component.get(component, 0)
+        if count < PER_COMPONENT_LIMIT:
+            kept.append(finding)
+            seen_per_component[component] = count + 1
+        else:
+            advice.omitted[component] = advice.omitted.get(component, 0) + 1
+    advice.grounded = kept
+
+    # observed_at was only needed for ranking; it is not part of the answer.
+    for finding in advice.grounded:
+        finding.pop("observed_at", None)
     return advice
 
 

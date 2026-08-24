@@ -137,3 +137,55 @@ class TestPartialAdvice:
 def test_advice_defaults_are_empty_not_optimistic() -> None:
     """A fresh Advice must not claim to have enough to say."""
     assert Advice().grounded == []
+
+
+class TestRelevanceCap:
+    def test_a_component_with_many_records_is_capped(self, engine: Engine) -> None:
+        """109 matches for one component is a dump, not advice. Every one is technically correct
+        — a breaking change introduced in 0.9 does affect 2.0.40 — but somebody choosing 2.0.40
+        starts after those changes rather than living through them."""
+        from bugmine.advisor import PER_COMPONENT_LIMIT
+
+        ref = f"advcap{uuid.uuid4().hex[:6]}"
+        for i in range(PER_COMPONENT_LIMIT + 5):
+            _seed(engine, ref, title=f"Removed thing number {i}", introduced=f"1.{i}.0")
+        with tenant_session(engine, None, commit=False) as s:
+            advice = advise(s, StackProfile(components=(StackComponent(ref=ref, version="2.0.0"),)))
+        assert len(advice.grounded) == PER_COMPONENT_LIMIT
+
+    def test_what_was_omitted_is_reported(self, engine: Engine) -> None:
+        """A truncated list that looks complete is worse than a long one."""
+        from bugmine.advisor import PER_COMPONENT_LIMIT
+
+        ref = f"advom{uuid.uuid4().hex[:6]}"
+        for i in range(PER_COMPONENT_LIMIT + 3):
+            _seed(engine, ref, title=f"Removed thing number {i}", introduced=f"1.{i}.0")
+        with tenant_session(engine, None, commit=False) as s:
+            advice = advise(s, StackProfile(components=(StackComponent(ref=ref, version="2.0.0"),)))
+        assert advice.omitted.get(ref) == 3
+
+    def test_the_cap_is_per_component_not_overall(self, engine: Engine) -> None:
+        """One noisy dependency must not crowd out every other component's findings."""
+        from bugmine.advisor import PER_COMPONENT_LIMIT
+
+        noisy = f"advnoisy{uuid.uuid4().hex[:5]}"
+        quiet = f"advquiet{uuid.uuid4().hex[:5]}"
+        for i in range(PER_COMPONENT_LIMIT + 6):
+            _seed(engine, noisy, title=f"Removed thing {i}", introduced=f"1.{i}.0")
+        _seed(engine, quiet, title="One quiet removal")
+        profile = StackProfile(components=(
+            StackComponent(ref=noisy, version="2.0.0"),
+            StackComponent(ref=quiet, version="2.0.0"),
+        ))
+        with tenant_session(engine, None, commit=False) as s:
+            advice = advise(s, profile)
+        assert any(f["component"] == quiet for f in advice.grounded)
+
+    def test_observed_at_does_not_leak_into_the_answer(self, engine: Engine) -> None:
+        """It is used for ranking only — it says when we saw the record, not when it stopped
+        mattering, and presenting it would invite that reading."""
+        ref = f"advleak{uuid.uuid4().hex[:6]}"
+        _seed(engine, ref, title="Removed a helper")
+        with tenant_session(engine, None, commit=False) as s:
+            advice = advise(s, StackProfile(components=(StackComponent(ref=ref, version="2.0.0"),)))
+        assert all("observed_at" not in f for f in advice.grounded)

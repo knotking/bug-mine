@@ -235,6 +235,9 @@ class AdviceOut(BaseModel):
     """Specific missing facts. Non-empty with no findings means "not enough information to say",
     which is a different answer from "no known problems" and must not be read as one."""
     not_covered: list[str]
+    omitted: dict[str, int] = Field(default_factory=dict)
+    """Records held back per component by the relevance cap. A short list that looks complete is
+    worse than a long one, so what was dropped is always stated."""
     interactions: list[dict[str, Any]]
     has_enough_to_say: bool
 

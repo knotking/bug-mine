@@ -576,6 +576,7 @@ def advise_stack(
         grounded=[{**f, "bug_type": f["bug_type"].value} for f in advice.grounded],
         unknowns=advice.unknowns,
         not_covered=advice.not_covered,
+        omitted=advice.omitted,
         interactions=advisor.interactions(session, profile),
         has_enough_to_say=advice.has_enough_to_say,
     )
