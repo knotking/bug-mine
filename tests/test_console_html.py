@@ -190,3 +190,24 @@ def test_the_example_counts_come_from_the_api_not_the_page() -> None:
     """Hardcoded counts would be wrong within a day — the catalog grew fourfold today alone."""
     source = _source()
     assert "/v1/public/components?limit=200" in source
+
+
+def test_the_examples_panel_is_anchored_to_the_search() -> None:
+    """As a grid the cards pushed the input up the page and made browsing, rather than
+    searching, the main thing. Anchored under the search it stays out of the way until asked
+    for."""
+    source = _source()
+    rule = re.search(r"\.expanel\{([^}]*)\}", source)
+    assert rule, "examples panel rule not found"
+    assert "position:absolute" in rule.group(1)
+
+
+def test_the_examples_panel_starts_closed() -> None:
+    assert re.search(r'<div class="expanel" id="examples" hidden>', _source())
+
+
+def test_the_examples_panel_closes_on_escape_and_click_outside() -> None:
+    """A panel that traps you is worse than no panel."""
+    source = _source()
+    assert "e.key === 'Escape'" in source
+    assert "document.addEventListener('click', close)" in source
