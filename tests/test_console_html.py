@@ -141,3 +141,29 @@ def test_narrow_screens_are_covered_by_breakpoints() -> None:
     widths = [int(w) for w in re.findall(r"@media\(max-width:(\d+)px\)", _source())]
     assert widths, "no max-width breakpoints at all"
     assert min(widths) <= 640, f"narrowest breakpoint is {min(widths)}px"
+
+
+def test_the_architecture_diagram_is_theme_aware() -> None:
+    """Hardcoded colours would render invisible in one theme or the other. Every fill and stroke
+    in the diagram has to come from a token, since the same SVG serves both."""
+    source = _source()
+    block = re.search(r'<svg viewBox="0 0 880 400".*?</svg>', source, re.S)
+    assert block, "architecture diagram not found"
+    literal_colours = re.findall(r'(?:fill|stroke)="(#[0-9a-fA-F]{3,8}|rgb[^"]*)"', block.group(0))
+    assert not literal_colours, f"hardcoded colours in the diagram: {literal_colours}"
+
+
+def test_the_diagram_scrolls_rather_than_widening_the_page() -> None:
+    """It has a minimum width to stay legible, so on a phone it must scroll inside its own box
+    rather than making the whole page scroll sideways."""
+    source = _source()
+    rule = re.search(r"\.arch\{([^}]*)\}", source)
+    assert rule and "overflow-x:auto" in rule.group(1)
+
+
+def test_the_diagram_has_an_accessible_description() -> None:
+    """It carries the argument of the page. A screen reader landing on an unlabelled SVG gets
+    nothing at all."""
+    source = _source()
+    block = re.search(r'<svg viewBox="0 0 880 400"[^>]*', source, re.S)
+    assert block and 'role="img"' in block.group(0) and "aria-label" in block.group(0)

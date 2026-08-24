@@ -381,6 +381,29 @@ pre.code .cm{color:var(--faint)}
 .idecard{padding:19px;border:1px solid var(--line);border-radius:13px;background:var(--bg)}
 .idecard b{display:block;margin-bottom:6px;font-size:14.5px}
 .idecard p{color:var(--dim);font-size:13.2px;line-height:1.55;margin:0 0 10px}
+/* ---------- architecture diagram ---------- */
+.arch{margin-top:30px;border:1px solid var(--line);border-radius:15px;background:var(--bg);
+  padding:22px 18px;overflow-x:auto}
+.arch svg{display:block;min-width:840px;width:100%;height:auto}
+.arch .box{fill:var(--panel);stroke:var(--line)}
+.arch .box-accent{fill:var(--accent-soft);stroke:var(--accent)}
+.arch .lbl{fill:var(--fg);font:600 12.5px ui-sans-serif,system-ui,sans-serif}
+.arch .sub-lbl{fill:var(--dim);font:11px ui-sans-serif,system-ui,sans-serif}
+.arch .tiny{fill:var(--faint);font:9.5px ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:.05em;text-transform:uppercase}
+.arch .flow{stroke:var(--line);stroke-width:1.6;fill:none;marker-end:url(#arrow)}
+.arch .flow-accent{stroke:var(--accent);stroke-width:1.8;fill:none;marker-end:url(#arrow-accent)}
+.arch .zone{fill:none;stroke:var(--line);stroke-dasharray:4 4;rx:12}
+.arch .zone-lbl{fill:var(--faint);font:600 9.5px ui-sans-serif,system-ui,sans-serif;
+  letter-spacing:.07em;text-transform:uppercase}
+.arch .drop{fill:var(--security);font:600 11px ui-sans-serif,system-ui,sans-serif}
+.arch-key{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:14px;
+  font-size:12px;color:var(--dim)}
+.arch-key b{color:var(--fg);font-weight:600}
+@media(prefers-reduced-motion:no-preference){
+  .arch .pulse{animation:archpulse 3s ease-in-out infinite}
+  @keyframes archpulse{0%,100%{opacity:.35}50%{opacity:1}}
+}
 footer.site{border-top:1px solid var(--line);padding:44px clamp(18px,4vw,44px) 34px;
   background:var(--panel)}
 .foot{max-width:1040px;margin:0 auto;display:grid;
@@ -751,6 +774,111 @@ function signin(msg){
         <h2 class="sec">Four stages. The third is the one others skip.</h2>
         <p class="secsub">Which is why a BugMine report is shorter than a dependency
           scanner's, and why what is left is worth reading.</p>
+
+        <div class="arch">
+          <svg viewBox="0 0 880 400" role="img"
+               aria-label="BugMine architecture: four discovery origins feed one catalog, which a scan narrows by reachability before reporting">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5"
+                      markerHeight="5" orient="auto-start-reverse">
+                <path d="M0 0 10 5 0 10z" fill="var(--line)"/></marker>
+              <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5"
+                      markerHeight="5" orient="auto-start-reverse">
+                <path d="M0 0 10 5 0 10z" fill="var(--accent)"/></marker>
+              <linearGradient id="cat" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="var(--accent)" stop-opacity=".14"/>
+                <stop offset="1" stop-color="var(--accent-dim)" stop-opacity=".05"/>
+              </linearGradient>
+            </defs>
+
+            <text x="16" y="20" class="zone-lbl">Discovery — four origins</text>
+            <rect class="zone" x="8" y="28" width="212" height="250"/>
+
+            <rect class="box" x="24" y="42" width="180" height="46" rx="10"/>
+            <text x="38" y="62" class="lbl">Crawl</text>
+            <text x="38" y="78" class="sub-lbl">429 sources · release notes</text>
+
+            <rect class="box" x="24" y="98" width="180" height="46" rx="10"/>
+            <text x="38" y="118" class="lbl">OSV</text>
+            <text x="38" y="134" class="sub-lbl">advisories, ranges declared</text>
+
+            <rect class="box" x="24" y="154" width="180" height="46" rx="10"/>
+            <text x="38" y="174" class="lbl">Scans</text>
+            <text x="38" y="190" class="sub-lbl">what customers hit</text>
+
+            <rect class="box" x="24" y="210" width="180" height="46" rx="10"/>
+            <text x="38" y="230" class="lbl">Evals</text>
+            <text x="38" y="246" class="sub-lbl">probes — the only LLM origin</text>
+
+            <path class="flow" d="M204 65 h44 q10 0 10 10 v90"/>
+            <path class="flow" d="M204 121 h44 q10 0 10 10 v34"/>
+            <path class="flow" d="M204 177 h54"/>
+            <path class="flow" d="M204 233 h44 q10 0 10 -10 v-34"/>
+
+            <rect x="268" y="120" width="182" height="116" rx="13" fill="url(#cat)"
+                  stroke="var(--accent)"/>
+            <text x="288" y="146" class="lbl">Catalog</text>
+            <text x="288" y="166" class="sub-lbl">23,000+ records</text>
+            <text x="288" y="184" class="sub-lbl">85% beyond CVEs</text>
+            <text x="288" y="206" class="tiny">every record cited</text>
+            <text x="288" y="224" class="tiny">direction: introduced vs fixed</text>
+
+            <path class="flow-accent" d="M450 178 h58"/>
+
+            <text x="516" y="20" class="zone-lbl">Your code — nothing leaves it but names</text>
+            <rect class="zone" x="508" y="28" width="364" height="250"/>
+
+            <rect class="box" x="524" y="60" width="150" height="46" rx="10"/>
+            <text x="538" y="80" class="lbl">Inventory</text>
+            <text x="538" y="96" class="sub-lbl">lockfile, resolved locally</text>
+
+            <rect class="box-accent" x="524" y="152" width="150" height="52" rx="10"/>
+            <text x="538" y="174" class="lbl">Reachability</text>
+            <text x="538" y="192" class="sub-lbl">py · js · jvm · go</text>
+
+            <path class="flow" d="M599 106 v40"/>
+
+            <text x="700" y="130" class="drop">168 suppressed</text>
+            <text x="700" y="148" class="sub-lbl">your code never</text>
+            <text x="700" y="163" class="sub-lbl">calls them</text>
+            <path class="flow pulse" d="M676 172 h20 q8 0 8 -8 v-12"/>
+
+            <rect class="box" x="700" y="196" width="156" height="46" rx="10"/>
+            <text x="714" y="216" class="lbl">56 reported</text>
+            <text x="714" y="232" class="sub-lbl">each citing its record</text>
+            <path class="flow-accent" d="M676 186 h16 q8 0 8 8 v4"/>
+
+            <text x="16" y="308" class="zone-lbl">Delivery</text>
+            <rect class="box" x="24" y="320" width="128" height="42" rx="10"/>
+            <text x="38" y="340" class="lbl">Console</text>
+            <text x="38" y="355" class="sub-lbl">search · scans</text>
+
+            <rect class="box" x="168" y="320" width="128" height="42" rx="10"/>
+            <text x="182" y="340" class="lbl">MCP</text>
+            <text x="182" y="355" class="sub-lbl">Cursor · Claude</text>
+
+            <rect class="box" x="312" y="320" width="128" height="42" rx="10"/>
+            <text x="326" y="340" class="lbl">GitHub</text>
+            <text x="326" y="355" class="sub-lbl">PR check run</text>
+
+            <rect class="box" x="456" y="320" width="128" height="42" rx="10"/>
+            <text x="470" y="340" class="lbl">CLI</text>
+            <text x="470" y="355" class="sub-lbl">bugmine check</text>
+
+            <rect class="box" x="600" y="320" width="128" height="42" rx="10"/>
+            <text x="614" y="340" class="lbl">Advisor</text>
+            <text x="614" y="355" class="sub-lbl">before you build</text>
+
+            <path class="flow" d="M778 242 q0 40 -40 50 h-10"/>
+            <path class="flow" d="M359 236 v50"/>
+          </svg>
+          <div class="arch-key">
+            <span><b>Four origins</b> feed one catalog</span>
+            <span><b>Reachability</b> narrows before reporting</span>
+            <span><b>Your source</b> never leaves your machine</span>
+          </div>
+        </div>
+
         <div class="steps">
           <div class="step"><div class="i">1</div><b>Crawl</b>
             <p>Release notes and changelogs from 115 projects. A worker with network access and
