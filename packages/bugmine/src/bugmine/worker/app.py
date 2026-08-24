@@ -211,6 +211,8 @@ def do_scan_analyze(body: ScanAnalyzeRequest, request: Request) -> dict[str, Any
                 record.commit_sha = body.commit_sha
                 record.uncovered_components = len(outcome.uncovered)
                 record.unresolved_manifests = len(inventory.unresolved)
+                record.suppressed_unreachable = outcome.suppressed
+                record.dependencies_scanned = len(inventory.dependencies)
                 # Every finding is built from a match, so grounding cannot be partial here.
                 record.grounding_complete = True
     except Exception as exc:

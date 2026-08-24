@@ -568,6 +568,8 @@ def start_scan(
         grounding_complete=scan.grounding_complete,
         uncovered_components=scan.uncovered_components,
         unresolved_manifests=0,
+        suppressed_unreachable=0,
+        dependencies_scanned=0,
         findings=0,
     )
 
@@ -594,6 +596,8 @@ def list_scans(
             grounding_complete=s.grounding_complete,
             uncovered_components=s.uncovered_components,
             unresolved_manifests=s.unresolved_manifests,
+            suppressed_unreachable=s.suppressed_unreachable,
+            dependencies_scanned=s.dependencies_scanned,
             findings=int(counts.get(s.id, 0)),
         )
         for s in scans

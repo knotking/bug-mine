@@ -200,3 +200,23 @@ class TestAnalyseWorker:
         assert body["unresolved_manifests"], "an unreadable manifest must be reported"
         with tenant_session(engine, tenant, commit=False) as s:
             assert s.get(Scan, scan_id).unresolved_manifests >= 1
+
+    def test_the_suppression_count_is_persisted(
+        self, worker_client, engine: Engine, two_tenants, tmp_path: Path
+    ) -> None:  # type: ignore[no-untyped-def]
+        """The number the product rests on was computed and thrown away — returned in the
+        worker's HTTP response, which Cloud Tasks consumes and discards. Three findings out of
+        three matches and three out of forty are different claims, and without this stored they
+        are indistinguishable.
+        """
+        tenant, _ = two_tenants
+        _seed_catalog(engine, "Remove support for `eval_type_backport()`")
+        response, scan_id = self._run(
+            worker_client, engine, tenant,
+            {"requirements.txt": LOCKFILE, "app.py": IGNORES_SYMBOL}, tmp_path,
+        )
+        assert response.json()["suppressed_unreachable"] == 1
+        with tenant_session(engine, tenant, commit=False) as s:
+            record = s.get(Scan, scan_id)
+            assert record.suppressed_unreachable == 1
+            assert record.dependencies_scanned == 1

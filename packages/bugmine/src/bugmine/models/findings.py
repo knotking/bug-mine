@@ -37,6 +37,11 @@ class Scan(Base):
 
     uncovered_components: Mapped[int] = mapped_column(default=0)
     unresolved_manifests: Mapped[int] = mapped_column(default=0, server_default="0")
+    suppressed_unreachable: Mapped[int] = mapped_column(default=0, server_default="0")
+    """Catalog matches removed because the project provably does not touch them. The number the
+    product rests on: three findings out of three matches and three out of forty are different
+    claims, and without this they look identical."""
+    dependencies_scanned: Mapped[int] = mapped_column(default=0, server_default="0")
     """Manifests naming dependencies without pinning them — a `pyproject.toml` with no
     lockfile. Counted separately because zero findings over unread dependencies looks exactly
     like zero findings over a clean repository, and they are not the same answer."""

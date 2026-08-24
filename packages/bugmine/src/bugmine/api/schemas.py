@@ -192,6 +192,10 @@ class ScanOut(BaseModel):
     grounding_complete: bool
     uncovered_components: int
     unresolved_manifests: int = 0
+    suppressed_unreachable: int = 0
+    """Matches narrowed away because the code does not touch them. A scan that suppressed
+    everything is otherwise indistinguishable from one that found nothing."""
+    dependencies_scanned: int = 0
     """Dependencies declared but not pinned. A scan with findings=0 and this above zero did not
     read the dependency graph at all, which is not the same as finding nothing."""
     findings: int
