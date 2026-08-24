@@ -1269,6 +1269,15 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
             "__FIREBASE_BROWSER_KEY__", os.environ.get("BUGMINE_FIREBASE_BROWSER_KEY", "")
         )
 
+    # Served on both paths. `/readyz` is the one anything outside the project can reach: the
+    # Google edge answers `/healthz` on a *.run.app host itself, with an HTML 404 carrying
+    # neither `server: Google Frontend` nor a trace id, so the request never arrives here. The
+    # route was registered and working the whole time, and the deploy check that curled it
+    # reported the service down on every deploy it has ever run.
+    #
+    # `/healthz` stays registered because probes are internal and never cross that edge, so
+    # anything still pointed at it — an old probe, a monitor — keeps working.
+    @app.get("/readyz", include_in_schema=False)
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}

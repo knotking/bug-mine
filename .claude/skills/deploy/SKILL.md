@@ -87,9 +87,15 @@ Giving it one to run a migration trades a durable security posture for a one-off
 ### 5. Verify — do not skip
 
 ```bash
-curl -s "$(terraform output -raw api_url)/healthz"
+curl -s "$(terraform output -raw api_url)/readyz"    # {"status":"ok"} — NOT /healthz
 terraform plan            # must report "No changes"
 ```
+
+**Not `/healthz`.** The Google edge answers that path itself on a `*.run.app` host, with an
+HTML 404 carrying neither `server: Google Frontend` nor a trace id — the request never reaches
+the container. The route was registered and the startup probe on it passed the whole time, so
+this check reported the service down on every deploy it has ever run. Probes are internal and
+never cross that edge, which is why the app was healthy and the check was not.
 
 Then the check that matters most, because it is the one that silently fails open:
 

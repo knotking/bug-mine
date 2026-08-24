@@ -174,8 +174,11 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       startup_probe {
+        # `/readyz`, matching what the deploy check can reach from outside. The probe itself
+        # works on either path — it never leaves the project — but two health paths that drift
+        # apart is how a green probe and a red external check end up describing one service.
         http_get {
-          path = "/healthz"
+          path = "/readyz"
         }
         initial_delay_seconds = 5
         period_seconds        = 5
