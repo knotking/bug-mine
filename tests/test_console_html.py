@@ -216,7 +216,19 @@ def test_the_examples_panel_closes_on_escape_and_click_outside() -> None:
 # Browser and language globals the page may call without defining. Anything else it calls has
 # to be defined in the page itself.
 _BROWSER_GLOBALS = frozenset(
-    ["fetch", "alert", "confirm", "prompt", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "encodeURIComponent", "decodeURIComponent", "encodeURI", "decodeURI", "parseInt", "parseFloat", "isNaN", "String", "Number", "Boolean", "Object", "Array", "Date", "Math", "JSON", "Promise", "Error", "Map", "Set", "RegExp", "Symbol", "requestAnimationFrame", "cancelAnimationFrame", "queueMicrotask", "structuredClone", "btoa", "atob", "URLSearchParams", "URL", "FormData", "Headers", "Request", "Response", "AbortController", "IntersectionObserver", "localStorage", "sessionStorage", "document", "window", "console", "navigator", "location", "history", "addEventListener", "removeEventListener", "dispatchEvent", "matchMedia", "getComputedStyle", "scrollTo", "if", "for", "while", "switch", "catch", "return", "typeof", "instanceof", "new", "delete", "void", "await", "async", "function", "var"]
+    (
+    "AbortController", "Array", "Boolean", "Date", "Error", "FormData", "Headers",
+    "IntersectionObserver", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp",
+    "Request", "Response", "Set", "String", "Symbol", "URL", "URLSearchParams",
+    "addEventListener", "alert", "async", "atob", "await", "btoa", "cancelAnimationFrame",
+    "catch", "clearInterval", "clearTimeout", "confirm", "console", "decodeURI",
+    "decodeURIComponent", "delete", "dispatchEvent", "document", "encodeURI",
+    "encodeURIComponent", "fetch", "for", "function", "getComputedStyle", "history", "if",
+    "instanceof", "isNaN", "localStorage", "location", "matchMedia", "navigator", "new",
+    "parseFloat", "parseInt", "prompt", "queueMicrotask", "removeEventListener",
+    "requestAnimationFrame", "return", "scrollTo", "sessionStorage", "setInterval", "setTimeout",
+    "structuredClone", "switch", "typeof", "var", "void", "while", "window",
+    )
 )
 
 _DEFINITION = (
