@@ -22,6 +22,7 @@ from bugmine.models.enums import (
     Role,
     SubjectDomain,
 )
+from bugmine.models.evals import EvalObservation
 from bugmine.models.findings import Finding, FindingCitation, Scan
 from bugmine.models.jobs import Job
 from bugmine.models.metering import CostBearer, UsageEvent, UsagePurpose
@@ -40,6 +41,7 @@ __all__ = [
     "Component",
     "ComponentAlias",
     "CostBearer",
+    "EvalObservation",
     "Finding",
     "FindingCitation",
     "Invite",

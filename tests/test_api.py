@@ -748,3 +748,144 @@ class TestRootServesTheApp:
 
     def test_console_still_works_for_existing_links(self, client: TestClient) -> None:
         assert client.get("/console").status_code == 200
+
+
+class TestEvalObservations:
+    """The ingestion surface for evals — the only origin that asserts a defect nobody published.
+
+    There is no vendor advisory to check an eval-derived record against, so who is allowed to
+    submit one matters more here than anywhere else in the API.
+    """
+
+    def _obs(self, **kw: object) -> dict[str, object]:
+        body: dict[str, object] = {
+            "run_id": f"run-{uuid.uuid4().hex[:10]}",
+            "component_ref": f"model-{uuid.uuid4().hex[:6]}",
+            "probe": "structured-output",
+            "probe_version": "1",
+            "runs": 100,
+            "failures": 4,
+        }
+        body.update(kw)
+        return body
+
+    def test_submitting_needs_a_credential(self, client: TestClient) -> None:
+        assert client.post("/v1/evals/observations", json=self._obs()).status_code in (401, 403)
+
+    def test_a_tenant_submission_returns_the_pooled_verdict(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """The response describes the pooled evidence, not this one submission.
+
+        Returning a single run's numbers would invite the caller to read them as a result, and
+        one run of forty is almost never enough to establish anything.
+        """
+        tenant, _ = two_tenants
+        r = client.post(
+            "/v1/evals/observations",
+            headers={"X-BugMine-Key": _issue_key(engine, tenant)},
+            json=self._obs(),
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["state"] == "corroborated"
+        assert body["pooled_runs"] == 100
+        assert body["accepted"] is True
+        assert 0 < body["lower_bound"] < body["observed_rate"] < body["upper_bound"]
+
+    def test_a_tenants_eval_record_is_invisible_to_another_tenant(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """A tenant's probes describe their prompts and their traffic. The evidence and any
+        record it produces are theirs."""
+        tenant, other = two_tenants
+        ref = f"model-{uuid.uuid4().hex[:6]}"
+        client.post(
+            "/v1/evals/observations",
+            headers={"X-BugMine-Key": _issue_key(engine, tenant)},
+            json=self._obs(component_ref=ref),
+        )
+        seen = client.get(
+            "/v1/evals/verdict",
+            headers={"X-BugMine-Key": _issue_key(engine, other)},
+            params={"component_ref": ref, "probe": "structured-output", "probe_version": "1"},
+        )
+        assert seen.status_code == 200, seen.text
+        assert seen.json()["pooled_runs"] == 0, "another tenant saw private eval evidence"
+
+    def test_a_tenant_cannot_write_to_the_shared_catalog(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """Otherwise any customer could assert a defect about anyone's software to every other
+        customer, on evidence nobody else can check."""
+        tenant, _ = two_tenants
+        ref = f"model-{uuid.uuid4().hex[:6]}"
+        client.post(
+            "/v1/evals/observations",
+            headers={"X-BugMine-Key": _issue_key(engine, tenant)},
+            json=self._obs(component_ref=ref),
+        )
+        public = client.get("/v1/public/bugs/search", params={"q": ref})
+        assert public.status_code == 200
+        assert public.json() == [], "a tenant's eval reached the public catalog"
+
+    def test_the_shared_route_needs_the_operator_token(self, client: TestClient) -> None:
+        r = client.post(
+            "/v1/admin/ingest/evals/observations",
+            headers={"X-BugMine-Operator": "wrong"},
+            json=self._obs(),
+        )
+        assert r.status_code in (401, 503)
+
+    def test_an_operator_submission_reaches_the_public_catalog(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BUGMINE_OPERATOR_TOKEN", "op-secret")
+        ref = f"model-{uuid.uuid4().hex[:6]}"
+        r = client.post(
+            "/v1/admin/ingest/evals/observations",
+            headers={"X-BugMine-Operator": "op-secret"},
+            json=self._obs(component_ref=ref),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["state"] == "corroborated"
+        found = client.get("/v1/public/bugs/search", params={"q": ref}).json()
+        assert found, "a corroborated operator eval should be publicly searchable"
+
+    def test_a_retry_does_not_double_count_over_the_api(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """The failure mode this guards is a retry storm manufacturing corroboration."""
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        body = self._obs(runs=50, failures=2)
+        first = client.post("/v1/evals/observations", headers={"X-BugMine-Key": key}, json=body)
+        again = client.post("/v1/evals/observations", headers={"X-BugMine-Key": key}, json=body)
+        assert first.json()["accepted"] is True
+        assert again.json()["accepted"] is False
+        assert again.json()["pooled_runs"] == 50
+
+    def test_incoherent_counts_are_refused(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        tenant, _ = two_tenants
+        r = client.post(
+            "/v1/evals/observations",
+            headers={"X-BugMine-Key": _issue_key(engine, tenant)},
+            json=self._obs(runs=10, failures=11),
+        )
+        assert r.status_code == 422, r.text
+
+    def test_asking_for_a_verdict_submits_nothing(
+        self, client: TestClient, engine: Engine, two_tenants: tuple[uuid.UUID, uuid.UUID]
+    ) -> None:
+        """A runner should be able to check whether more runs are worth paying for without the
+        asking changing the answer."""
+        tenant, _ = two_tenants
+        key = _issue_key(engine, tenant)
+        ref = f"model-{uuid.uuid4().hex[:6]}"
+        params = {"component_ref": ref, "probe": "p", "probe_version": "1"}
+        for _ in range(3):
+            assert client.get(
+                "/v1/evals/verdict", headers={"X-BugMine-Key": key}, params=params
+            ).json()["pooled_runs"] == 0

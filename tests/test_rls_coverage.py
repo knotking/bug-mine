@@ -34,6 +34,11 @@ EXPECTED = {
     # A quota always belongs to a tenant — there is no system-borne limit — so it needs none of
     # the exceptions jobs and usage events carry.
     "quota": "own_tenant_only",
+    # Eval evidence follows bug_record: public evidence is visible to everyone, a tenant's own
+    # only to them. Scope matters more here than elsewhere — a tenant's probe results describe
+    # their prompts and their traffic, and the pooling query relies on this policy rather than
+    # duplicating it, so this is the layer that would have to fail.
+    "eval_observation": "scope_based",
 }
 
 

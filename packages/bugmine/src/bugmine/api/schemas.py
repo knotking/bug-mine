@@ -303,6 +303,72 @@ class SourceIn(BaseModel):
     interval_minutes: int = Field(default=1440, ge=15)
 
 
+class EvalObservationIn(BaseModel):
+    """One eval run, as a probe runner reports it.
+
+    Counts rather than raw transcripts: BugMine needs to know how often the target misbehaved,
+    not what it said each time. A handful of failing samples come along as evidence and are
+    capped on arrival.
+    """
+
+    run_id: str = Field(
+        max_length=120,
+        description="The runner's own id for this run. Resubmitting it is a no-op, so a retry "
+        "after a timeout cannot double-count.",
+    )
+    component_ref: str = Field(max_length=200, description="The target, e.g. gemini-3.7-flash")
+    probe: str = Field(max_length=160)
+    probe_version: str = Field(
+        max_length=40,
+        description="Bumped whenever the prompt or check changes. Results from different "
+        "versions are never pooled — they answer different questions.",
+    )
+    runs: int = Field(gt=0, le=1_000_000)
+    failures: int = Field(ge=0)
+    errors: int = Field(
+        default=0,
+        ge=0,
+        description="Transport failures. Excluded from the rate on both sides: a timeout is "
+        "not the target being wrong.",
+    )
+    subject_domain: SubjectDomain = SubjectDomain.LLM_MODEL
+    target_revision: str | None = Field(default=None, max_length=200)
+    prompt_digest: str | None = Field(default=None, max_length=64)
+    samples: list[str] = Field(default_factory=list, description="Failing responses; first 3 kept.")
+    notes: str | None = None
+
+
+class EvalVerdictOut(BaseModel):
+    """What the pooled evidence supports — never what a single submission looks like."""
+
+    accepted: bool = Field(
+        description="False when this run_id had already been submitted. Not an error: the "
+        "correct answer to a retry is the same answer, not a second count."
+    )
+    state: str = Field(description="corroborated | refuted | undetermined")
+    pooled_runs: int
+    pooled_failures: int
+    pooled_errors: int
+    behavioural_runs: int = Field(description="Pooled runs less transport errors.")
+    observed_rate: float
+    lower_bound: float = Field(
+        description="Lower bound of the 95% Wilson interval. The number decisions are made on."
+    )
+    upper_bound: float
+    runs_to_decide: int = Field(
+        description="Roughly how many total runs would settle a defect at the observed rate. "
+        "0 when already decided. Returned so a runner can schedule rather than guess."
+    )
+    record_id: str | None = Field(
+        default=None, description="The catalog record, once the evidence supports one."
+    )
+    retracted: bool = Field(
+        default=False,
+        description="The record was withdrawn: accumulated evidence pushed the interval back "
+        "below the tolerated rate.",
+    )
+
+
 class WhoAmIOut(BaseModel):
     tenant: TenantOut
     principal_kind: str

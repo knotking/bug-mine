@@ -931,6 +931,76 @@ paths:
           description: Coverage
           content: { application/json: { schema: { $ref: "#/components/schemas/CoverageReport" } } }
 
+  /evals/observations:
+    post:
+      tags: [evals]
+      summary: Report one eval run
+      description: |
+        FR-52, FR-55. Submit the counts from one probe run against one target. Scoped to the
+        calling tenant: a tenant's probes describe their own prompts and traffic, so the
+        evidence and any record it produces stay private to them. Contributing to the shared
+        catalog is the operator-gated `/admin/ingest/evals/observations`.
+
+        The response describes the **pooled** evidence across every submission sharing the same
+        question — target, probe, probe version and target revision — never this submission
+        alone. One run of forty is almost never enough to establish anything, and returning its
+        numbers by themselves would invite the caller to read them as a result.
+
+        Submission is idempotent on `run_id`. A runner retrying after a timeout gets the same
+        answer rather than a second count, because without that a retry storm manufactures
+        corroboration out of one bad afternoon.
+      operationId: submitEvalObservation
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EvalObservationIn" } } }
+      responses:
+        "200":
+          description: The pooled verdict
+          content: { application/json: { schema: { $ref: "#/components/schemas/EvalVerdict" } } }
+        "422":
+          description: Counts that cannot describe a real run
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  /evals/verdict:
+    get:
+      tags: [evals]
+      summary: What the evidence so far supports
+      description: |
+        Read-only. Exists so a runner can decide whether more runs are worth paying for before
+        paying for them — evals are the most expensive thing in this system by a wide margin,
+        and `runs_to_decide` is the number that makes that a decision rather than a guess.
+      operationId: getEvalVerdict
+      parameters:
+        - { name: component_ref, in: query, required: true, schema: { type: string } }
+        - { name: probe, in: query, required: true, schema: { type: string } }
+        - { name: probe_version, in: query, required: true, schema: { type: string } }
+        - { name: target_revision, in: query, schema: { type: string, nullable: true } }
+        - { name: subject_domain, in: query, schema: { $ref: "#/components/schemas/SubjectDomain" } }
+      responses:
+        "200":
+          description: The pooled verdict
+          content: { application/json: { schema: { $ref: "#/components/schemas/EvalVerdict" } } }
+
+  /admin/ingest/evals/observations:
+    post:
+      tags: [admin, evals]
+      summary: Report an eval run into the shared catalog
+      description: |
+        Operator-gated, via `X-BugMine-Operator`. An eval-derived record asserts a defect nobody
+        else has published — there is no vendor advisory to check it against, so it rests
+        entirely on trusting whoever ran the probe. Accepting that from a tenant credential
+        would let one customer put a claim about someone else's software in front of every
+        other customer.
+      operationId: submitSystemEvalObservation
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EvalObservationIn" } } }
+      responses:
+        "200":
+          description: The pooled verdict
+          content: { application/json: { schema: { $ref: "#/components/schemas/EvalVerdict" } } }
+        "401": { description: Operator token required }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1015,6 +1085,99 @@ components:
       content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
 
   schemas:
+    EvalObservationIn:
+      type: object
+      required: [run_id, component_ref, probe, probe_version, runs, failures]
+      properties:
+        run_id:
+          type: string
+          maxLength: 120
+          description: >
+            The runner's own id for this run. Resubmitting it is a no-op, so a retry after a
+            timeout cannot double-count.
+        component_ref: { type: string, maxLength: 200, description: "The target, e.g. gemini-3.7-flash" }
+        probe: { type: string, maxLength: 160 }
+        probe_version:
+          type: string
+          maxLength: 40
+          description: >
+            Bumped whenever the prompt or the check changes. Results from different probe
+            versions are never pooled — they answer different questions, and pooling across the
+            change would let a change in what was asked look like a change in how the target
+            behaved.
+        runs: { type: integer, minimum: 1, maximum: 1000000 }
+        failures: { type: integer, minimum: 0 }
+        errors:
+          type: integer
+          minimum: 0
+          default: 0
+          description: >
+            Transport failures. Excluded from the rate on both sides: a timeout is not the
+            target being wrong, and counting it either way is a lie in one direction or the
+            other.
+        subject_domain:
+          allOf: [{ $ref: "#/components/schemas/SubjectDomain" }]
+          default: llm_model
+          description: >
+            Not LLM-only. Anything whose behaviour can be exercised can be probed; the
+            applicability shape of the resulting record follows from this field.
+        target_revision:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: >
+            What the provider said it served, when it says anything. Usually nothing for a
+            hosted model, which is the entire reason that subject needs evals rather than a
+            changelog.
+        prompt_digest: { type: string, nullable: true, maxLength: 64 }
+        samples:
+          type: array
+          items: { type: string }
+          description: Failing responses kept as evidence. First 3 retained.
+        notes: { type: string, nullable: true }
+
+    EvalVerdict:
+      type: object
+      description: >
+        What the pooled evidence supports. `state` is three-valued on purpose: "we have not
+        shown it" and "we have shown it is absent" are different claims, and collapsing them is
+        where a system starts reporting ignorance as reassurance.
+      required: [accepted, state, pooled_runs, pooled_failures, pooled_errors, behavioural_runs,
+                 observed_rate, lower_bound, upper_bound, runs_to_decide]
+      properties:
+        accepted:
+          type: boolean
+          description: >
+            False when this run_id had already been submitted. Not an error — the correct
+            answer to a retry is the same answer, not a second count.
+        state: { type: string, enum: [corroborated, refuted, undetermined] }
+        pooled_runs: { type: integer }
+        pooled_failures: { type: integer }
+        pooled_errors: { type: integer }
+        behavioural_runs: { type: integer, description: Pooled runs less transport errors. }
+        observed_rate: { type: number, format: double }
+        lower_bound:
+          type: number
+          format: double
+          description: >
+            Lower bound of the 95% Wilson interval, and the number decisions are made on.
+            Deciding on the observed rate instead would let a small sample that happens to look
+            bad become a record.
+        upper_bound: { type: number, format: double }
+        runs_to_decide:
+          type: integer
+          description: >
+            Roughly how many total runs would settle a defect at the observed rate; 0 when
+            already decided. A suite that stops at forty and reports nothing found has, for a
+            1-in-100 defect, gathered evidence that could never have shown one.
+        record_id: { type: string, format: uuid, nullable: true }
+        retracted:
+          type: boolean
+          default: false
+          description: >
+            The record was withdrawn: accumulated evidence pushed the interval back below the
+            tolerated rate. Promotion without retraction would be a ratchet.
+
     # ---- enums. Every one carries `unknown`; clients must tolerate unseen values.
     SubjectDomain:
       type: string

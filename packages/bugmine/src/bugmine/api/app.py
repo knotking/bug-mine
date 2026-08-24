@@ -392,6 +392,35 @@ def trigger_osv(request: Request, limit: int = Q(default=250, ge=1, le=2000)) ->
     return {"components": len(rows), "enqueued": enqueued}
 
 
+@ingest.post(
+    "/evals/observations",
+    dependencies=[Depends(_require_operator)],
+    response_model=S.EvalVerdictOut,
+)
+def submit_system_eval_observation(
+    body: S.EvalObservationIn, request: Request
+) -> S.EvalVerdictOut:
+    """Report an eval run into the **shared** catalog.
+
+    Operator-gated, and the distinction is the same one that governs sources. An eval-derived
+    record asserts a defect nobody else has published — there is no vendor advisory to check it
+    against, so it rests entirely on trusting whoever ran the probe. Accepting that from any
+    tenant credential would let one customer put a claim about someone else's software in front
+    of every other customer.
+    """
+    from bugmine.evals import intake
+
+    with tenant_session(request.app.state.engine, None) as session:
+        try:
+            verdict = intake.submit(session, _submission(body), privacy_scope=PrivacyScope.PUBLIC)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"error": {"code": "invalid_observation", "message": str(exc)}},
+            ) from exc
+        return _verdict_out(verdict)
+
+
 @ingest.post("/sources", dependencies=[Depends(_require_operator)], status_code=201)
 def add_system_source(body: S.SourceIn, request: Request) -> S.SourceOut:
     """Register a source for the **shared** catalog.
@@ -589,6 +618,118 @@ def advise_stack(
         omitted=advice.omitted,
         interactions=advisor.interactions(session, profile),
         has_enough_to_say=advice.has_enough_to_say,
+    )
+
+
+evals = APIRouter(prefix="/v1/evals", tags=["evals"])
+
+
+def _verdict_out(v) -> S.EvalVerdictOut:  # type: ignore[no-untyped-def]
+    return S.EvalVerdictOut(
+        accepted=v.accepted,
+        state=v.state,
+        pooled_runs=v.pooled_runs,
+        pooled_failures=v.pooled_failures,
+        pooled_errors=v.pooled_errors,
+        behavioural_runs=v.behavioural_runs,
+        observed_rate=round(v.rate.observed, 6),
+        lower_bound=round(v.rate.lower, 6),
+        upper_bound=round(v.rate.upper, 6),
+        runs_to_decide=v.runs_to_decide,
+        record_id=str(v.record_id) if v.record_id else None,
+        retracted=v.retracted,
+    )
+
+
+def _submission(body: S.EvalObservationIn):  # type: ignore[no-untyped-def]
+    from bugmine.evals.intake import Submission
+
+    return Submission(
+        run_id=body.run_id,
+        subject_domain=body.subject_domain,
+        component_ref=body.component_ref,
+        probe=body.probe,
+        probe_version=body.probe_version,
+        runs=body.runs,
+        failures=body.failures,
+        errors=body.errors,
+        target_revision=body.target_revision,
+        prompt_digest=body.prompt_digest,
+        samples=tuple(body.samples),
+        notes=body.notes,
+    )
+
+
+@evals.post("/observations", response_model=S.EvalVerdictOut)
+def submit_eval_observation(
+    body: S.EvalObservationIn,
+    # tenant_db_write, not tenant_db. The read-only session discards writes silently, so this
+    # returned a confident "corroborated" for evidence that was never stored — the same way
+    # console-added sources once returned 201 with nothing in the table.
+    session: Session = Depends(tenant_db_write),
+    principal: Principal = Depends(require_principal),
+) -> S.EvalVerdictOut:
+    """Report one eval run. Scoped to the calling tenant.
+
+    A tenant's own probes describe their prompts and their traffic, so the evidence and any
+    record it produces stay private to them. Contributing to the shared catalog is a separate,
+    operator-gated route — otherwise any customer could assert a defect about anyone's software
+    to every other customer, and eval-derived records are precisely the ones nobody else can
+    check against a vendor advisory.
+
+    The response describes the *pooled* evidence, not this submission. One run of forty is
+    almost never enough to establish anything, and returning its numbers alone would invite the
+    caller to treat them as a result.
+    """
+    from bugmine.evals import intake
+
+    try:
+        verdict = intake.submit(
+            session,
+            _submission(body),
+            privacy_scope=PrivacyScope.TENANT,
+            tenant_id=principal.tenant_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "invalid_observation", "message": str(exc)}},
+        ) from exc
+    return _verdict_out(verdict)
+
+
+@evals.get("/verdict", response_model=S.EvalVerdictOut)
+def eval_verdict(
+    component_ref: str,
+    probe: str,
+    probe_version: str,
+    target_revision: str | None = None,
+    subject_domain: SubjectDomain = SubjectDomain.LLM_MODEL,
+    session: Session = Depends(tenant_db),
+    principal: Principal = Depends(require_principal),
+) -> S.EvalVerdictOut:
+    """What the evidence gathered so far supports, without submitting anything.
+
+    So a runner can decide whether more runs are worth paying for before paying for them. Evals
+    are the most expensive thing in this system by a wide margin, and `runs_to_decide` is the
+    number that makes that a decision rather than a guess.
+    """
+    from bugmine.evals import intake
+
+    key = intake.Submission(
+        run_id="",
+        subject_domain=subject_domain,
+        component_ref=component_ref,
+        probe=probe,
+        probe_version=probe_version,
+        runs=1,
+        failures=0,
+        target_revision=target_revision,
+    )
+    return _verdict_out(
+        intake.verdict_for(
+            session, key, privacy_scope=PrivacyScope.TENANT, tenant_id=principal.tenant_id
+        )
     )
 
 
@@ -1096,6 +1237,7 @@ def create_app(engine=None) -> FastAPI:  # type: ignore[no-untyped-def]
     app.include_router(catalog)
     app.include_router(check)
     app.include_router(ingest)
+    app.include_router(evals)
     app.include_router(console)
 
     # Served by the API rather than as a separate static host. One fewer deployable, and the
