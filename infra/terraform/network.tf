@@ -40,6 +40,24 @@ resource "google_compute_router_nat" "nat" {
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 
+  # Ports, sized for a crawler whose targets are almost all one host.
+  #
+  # The default is 64 ports per instance, which assumes traffic spread across many
+  # destinations. Ours is not: nearly every source is a GitHub URL, so the fleet contends for
+  # source ports against six destination addresses on port 443 while the crawl service runs at
+  # concurrency 80. NAT ran out and dropped the packets — 200 drops in two hours, surfacing in
+  # the worker as `[Errno 113] No route to host` against api.github.com.
+  #
+  # That failure is worse than its volume suggests. The crawl is recorded as failed, so the
+  # source's backoff escalates and it is fetched less often from then on — a healthy source
+  # penalised for our network configuration, and the catalog quietly ages as a result.
+  #
+  # Dynamic allocation lets NAT grow an instance's range under load instead of failing at a
+  # fixed ceiling. It requires endpoint-independent mapping to stay off, which it is.
+  enable_dynamic_port_allocation = true
+  min_ports_per_vm               = 128
+  max_ports_per_vm               = 8192
+
   log_config {
     enable = true
     filter = "ERRORS_ONLY"
