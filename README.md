@@ -2,6 +2,8 @@
 
 # BugMine
 
+<img width="2752" height="1536" alt="Dependency_Scanning_Challenges_and_Solutions" src="https://github.com/user-attachments/assets/9cdd17e0-4ab9-4f05-9e15-977ff6cedc3a" />
+
 **Every dependency breaks. Know which ones break you.**
 
 A holistic catalog of known defects across an entire software stack — breaking changes,
