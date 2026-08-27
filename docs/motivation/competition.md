@@ -43,6 +43,8 @@ into. Treat them as distribution.
 | Model behaviour drift | no | no | no | no | no | *no scheduler* |
 | Cross-customer corroboration | no | no | no | no | no | *never run* |
 | Subscribe / notify over time | no | CI | no | yes | no | **yes** |
+| Durable, dated record of every finding | no | scan history | no | yes | no | **yes** |
+| Triage state that persists across scans | no | no | no | yes | no | *not built* |
 | Advice before code exists | native | threat model | no | no | native | *contested* |
 | Every finding cites a record | no | partial | OSV id | CVE id | no | **enforced** |
 | Bundled where developers already are | yes | yes | yes | yes | n/a | **no** |
@@ -87,7 +89,52 @@ proprietary origin in [`discovery.md`](../requirements/discovery.md), and
 **Both are listed in the README under *What is not built*.** The two defensible origins are
 unshipped; the most commoditizable surface is live. The build order is inverted.
 
-## 5. The uncomfortable finding
+## 5. State is the enterprise argument
+
+The strongest claim available is also the only one that runs on what is **already built**.
+`scan` and `finding` are persisted per tenant with repo, commit SHA, timestamp and the citation
+that grounds each one, alongside the honest counters — `uncovered_components`,
+`unresolved_manifests`, `suppressed_unreachable`. That is a durable, queryable, auditable record.
+An agent's answer lives in one developer's terminal scrollback and is gone.
+
+Two corrections before this goes in a deck, because in its loose form it loses to the first
+technical buyer who pushes.
+
+**"Agents don't remember" is false.** Claude Code has `CLAUDE.md` and a persistent memory
+directory. What no agent has is *shared, queryable, multi-tenant, auditable* state — per-developer
+markdown on one laptop is not a system of record. Claim that, not amnesia.
+
+**The competitor here is GitHub, not Claude Code.** Dependabot alerts already carry
+open / dismissed / fixed state, a dismissal reason, an actor, and an org-wide rollup in the
+security overview — bundled, and free on public repositories. So "we have state and they don't"
+loses on contact. The claim that survives is narrower:
+
+> GitHub gives you a triage ledger for CVEs. Nothing gives you one for the 82% that isn't a CVE.
+
+What that buys, stated as claims rather than features:
+
+- **A finding is an asset, not an answer** — dated, cited, attributable to a commit. Ask an agent
+  twice and you get two answers and no evidence either was asked.
+- **Triage once, not every week.** Teams abandon scanners over re-litigating the same 200 findings
+  every Monday, not over the first scan.
+- **Exposure across the estate.** "How many of our 400 services are on the affected version" is one
+  query against a catalog, and 400 agent sessions otherwise.
+- **The record compounds and cannot be bought later** — the same temporal property
+  [`solution.md`](solution.md) §4 claims for evals, but over the surface that already works.
+- **Answers what we knew and when.** A dated finding with a citation survives an audit; a chat
+  transcript does not.
+
+**Two gaps stand between this and a demo.** There are no dispositions — `feedback.md` specifies
+`not applicable` against `wrong`, and FR-62 measures precision by origin, but `disposition` appears
+nowhere in `src/` or `tests/`. And `finding` is keyed to `scan_id`, so the same problem on two
+commits is two unrelated rows, with no way to express *still open*, *recurred* or *fixed on 14 Aug*.
+
+Today this is **scan history, not issue tracking**. Closing it is a stable finding key and a status
+column — small, well-scoped, no research risk — and it converts a capability that already exists
+into the enterprise pitch. Unlike the eval scheduler and cross-tenant corroboration, nothing about
+it is blocked on scale.
+
+## 6. The uncomfortable finding
 
 [`market.md`](market.md) §2 has one: SCA is the smallest and slowest market BugMine touches. This
 is the second, and it points the same way.
@@ -107,10 +154,12 @@ will pay for non-security bug intelligence" — and this research is the stronge
 that it is the assumption the business rests on. Nothing in the product can settle it. Only a
 renewal can.
 
-## 6. What it changes
+## 7. What it changes
 
 - **Do not compete on scanning.** The commodity layer is now free and bundled in three CLIs. A
   better wrapper around OSV is not a business.
+- **A stable finding key and a status column are the cheapest unbuilt thing**, and the only one
+  that turns an existing capability into a pitch without waiting for scale (§5).
 - **The scheduler is the highest-value unbuilt thing.** Drift detection without periodic re-runs
   is a diagram, not a capability, and it is the only row on the board with no occupant.
 - **Sell measurement, not retrieval.** Everything retrievable is being retrieved for free by
@@ -126,7 +175,7 @@ Independently of [`market.md`](market.md), which reached the same conclusion fro
 this points at the eval surface rather than the scanner. Two arguments from unrelated evidence
 converging is worth more than either alone.
 
-## 7. What argues against this document
+## 8. What argues against this document
 
 - **Six months is a short window.** Absence of a competitor's feature in one release cycle is
   weak evidence about a roadmap. OpenAI and Google may both be building toward breakage
@@ -137,6 +186,9 @@ converging is worth more than either alone.
 - **Codex Security's sandbox validation is for security findings.** Extending it to "will this
   upgrade break my build" is a substantially harder problem than the current one, and treating
   the extension as inevitable overstates the threat.
+- **The system-of-record argument is partly an argument for Jira.** Enterprises already track
+  issues somewhere, and a buyer will reasonably ask why this is another console rather than an
+  integration into the ledger they own. §5 does not answer that.
 - **The capability matrix is compiled from vendor documentation and press coverage**, not from
   running each tool against a common corpus. It records claimed scope. A measured comparison
   would be better and does not exist yet.
