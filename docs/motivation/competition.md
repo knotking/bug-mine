@@ -54,7 +54,7 @@ functional and performance regressions — which is 20,131 of the catalog's 24,2
 differentiator [`solution.md`](solution.md) §2 calls "the genuine one" is confirmed, from the
 adversarial direction.
 
-## 3. Three rows BugMine loses
+## 3. Four rows BugMine loses
 
 **Findings validated by execution.** Codex Security sandbox-validates a finding before reporting
 it. That is empirical proof rather than inference, and it is the mechanism
@@ -69,6 +69,12 @@ gives BugMine a Stack Profile distilled from it. Being strictly downstream of so
 knows more about the user's intent than the input format can carry is a structural disadvantage,
 not a gap to close. Grounding is the one defence — [ADR-0002](../adr/0002-grounding-and-provenance.md)
 means every advisor warning cites a record, and an agent's answer cites nothing.
+
+**Triage state.** Dependabot alerts carry open, dismissed and fixed, with a dismissal reason
+and the actor who set it, rolled up across every repository in the organisation. BugMine has no
+disposition column at all, and `finding` is keyed to `scan_id`, so nothing persists between
+scans. This is the row most worth losing loudly, because it is also by far the cheapest to win
+— see §5.
 
 **Distribution.** Gemini's dependency scan is one command in an already-installed CLI. GitHub's
 runs inside the repository host. BugMine needs a URL, an API key and a decision. For a product
