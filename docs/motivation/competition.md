@@ -74,7 +74,7 @@ means every advisor warning cites a record, and an agent's answer cites nothing.
 and the actor who set it, rolled up across every repository in the organisation. BugMine has no
 disposition column at all, and `finding` is keyed to `scan_id`, so nothing persists between
 scans. This is the row most worth losing loudly, because it is also by far the cheapest to win
-— see §5.
+— see §6.
 
 **Distribution.** Gemini's dependency scan is one command in an already-installed CLI. GitHub's
 runs inside the repository host. BugMine needs a URL, an API key and a decision. For a product
@@ -95,7 +95,38 @@ proprietary origin in [`discovery.md`](../requirements/discovery.md), and
 **Both are listed in the README under *What is not built*.** The two defensible origins are
 unshipped; the most commoditizable surface is live. The build order is inverted.
 
-## 5. State is the enterprise argument
+## 5. How fast could they close it
+
+The question is not whether a model vendor *could* replicate BugMine. It is how long each piece
+would take, and the answer is uneven enough that the unevenness is itself the strategy.
+
+| Capability | Time for an agent vendor | Why |
+| --- | --- | --- |
+| Dependency scanning | **weeks** | Bundle OSV-Scanner behind a skill — precisely what Gemini did. A third-party plugin needs no roadmap decision at all |
+| Ad-hoc breakage research | **shipped** | Works today in any agent with web access |
+| Reachability suppression | **a quarter** | An agent reads code natively. Lockfile → OSV hits → "does this repository call the affected symbol" yields respectable suppression with no static analysis whatever |
+| The non-CVE catalog | **off-strategy** | 24,286 versioned, cited, queryable records is a data-operations business. OpenAI and Anthropic sell models, which is why neither runs a CVE database either |
+| Shared multi-tenant state | **a product line** | A local CLI process becomes a backend with tenancy, auth, retention and compliance. Defensible against the agents; not against GitHub, which already has all of it |
+| Model drift measurement | **structurally impossible** | See below |
+| Cross-tenant corroboration | **blocked by commitment** | Vendors see the code; their privacy posture forbids pooling it |
+
+**Independence is the moat, not effort.** A model vendor publishing the finding that its own model
+degraded is a conflict of interest, not an engineering problem — the same reason auditors are not
+employed by the firms they audit. No amount of investment closes that gap. It is the only claim in
+this document with that property, and it is a stronger form of the argument
+[`solution.md`](solution.md) §4 makes on temporal grounds alone: even a competitor who *had* been
+measuring from the beginning could not credibly publish the result.
+
+**But the exposed asset is the demo, not the product.** A competitor does not need the hard half to
+do damage. If any agent ships a competent dependency skill with model-judged reachability, the
+75%-suppression-on-`poetry` opener stops looking differentiated — while the catalog underneath it
+still is. That opener is what gets meetings, and it is the most replicable thing in the system.
+
+This reorders §8 rather than contradicting it. The ledger and the drift feed are not merely the
+defensible surfaces; they are the parts of a demonstration that **cannot be reproduced in a
+terminal during the meeting where they are shown**.
+
+## 6. State is the enterprise argument
 
 The strongest claim available is also the only one that runs on what is **already built**.
 `scan` and `finding` are persisted per tenant with repo, commit SHA, timestamp and the citation
@@ -140,7 +171,7 @@ column — small, well-scoped, no research risk — and it converts a capability
 into the enterprise pitch. Unlike the eval scheduler and cross-tenant corroboration, nothing about
 it is blocked on scale.
 
-## 6. The uncomfortable finding
+## 7. The uncomfortable finding
 
 [`market.md`](market.md) §2 has one: SCA is the smallest and slowest market BugMine touches. This
 is the second, and it points the same way.
@@ -160,12 +191,12 @@ will pay for non-security bug intelligence" — and this research is the stronge
 that it is the assumption the business rests on. Nothing in the product can settle it. Only a
 renewal can.
 
-## 7. What it changes
+## 8. What it changes
 
 - **Do not compete on scanning.** The commodity layer is now free and bundled in three CLIs. A
   better wrapper around OSV is not a business.
 - **A stable finding key and a status column are the cheapest unbuilt thing**, and the only one
-  that turns an existing capability into a pitch without waiting for scale (§5).
+  that turns an existing capability into a pitch without waiting for scale (§6).
 - **The scheduler is the highest-value unbuilt thing.** Drift detection without periodic re-runs
   is a diagram, not a capability, and it is the only row on the board with no occupant.
 - **Sell measurement, not retrieval.** Everything retrievable is being retrieved for free by
@@ -181,20 +212,22 @@ Independently of [`market.md`](market.md), which reached the same conclusion fro
 this points at the eval surface rather than the scanner. Two arguments from unrelated evidence
 converging is worth more than either alone.
 
-## 8. What argues against this document
+## 9. What argues against this document
 
 - **Six months is a short window.** Absence of a competitor's feature in one release cycle is
   weak evidence about a roadmap. OpenAI and Google may both be building toward breakage
   intelligence and simply have not shipped it.
-- **Reachability may still commoditize.** Gemini ships OSV-Scanner *without* reachability today,
-  which supports [`solution.md`](solution.md) §1's caveat rather than refuting it. Adding it is
-  an integration, not a research problem.
+- **The reachability comfort in this document is too generous.** §2 records that no agent bundles
+  reachability, which reads as a durable gap and is not one. Nobody has bundled it because nobody
+  has bothered — an agent that reads the code can approximate the verdict from a prompt, with none
+  of the per-language symbol analysis in `reach/`. Those modules are a real asset defending a line
+  that is cheap to cross.
 - **Codex Security's sandbox validation is for security findings.** Extending it to "will this
   upgrade break my build" is a substantially harder problem than the current one, and treating
   the extension as inevitable overstates the threat.
 - **The system-of-record argument is partly an argument for Jira.** Enterprises already track
   issues somewhere, and a buyer will reasonably ask why this is another console rather than an
-  integration into the ledger they own. §5 does not answer that.
+  integration into the ledger they own. §6 does not answer that.
 - **The capability matrix is compiled from vendor documentation and press coverage**, not from
   running each tool against a common corpus. It records claimed scope. A measured comparison
   would be better and does not exist yet.
