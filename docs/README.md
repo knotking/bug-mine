@@ -39,7 +39,7 @@ rejected, which the code cannot tell you.
 | [`data-model/`](data-model/) | [`stack-profile.md`](data-model/stack-profile.md): applicability as a tagged union, because SaaS and models have no semver |
 | [`api/`](api/) | The contract, plus [`openapi.yaml`](api/openapi.yaml) |
 | [`plan/`](plan/) | Implementation plans with technology choices and cost estimates |
-| [`motivation/`](motivation/) | Problem, trajectory, market, solution — researched, sourced, and arguing both sides |
+| [`motivation/`](motivation/) | Problem, trajectory, market, competition, solution — researched, sourced, and arguing both sides. [`competition.md`](motivation/competition.md) is the newest: every coding agent now ships security scanning, and none of them ship what BugMine catalogs |
 
 ## Conventions
 
@@ -53,8 +53,9 @@ rather than an edit. The rejected alternative is the part worth keeping.
 percentile under a named load is.
 
 **Counter-arguments are included.** [`motivation/problem.md`](motivation/problem.md) ends with
-what argues against its own case, and [`solution.md`](motivation/solution.md) names the
-incumbents already shipping reachability. A document that only argues one side is worth less
+what argues against its own case, [`solution.md`](motivation/solution.md) names the
+incumbents already shipping reachability, and [`competition.md`](motivation/competition.md)
+ends by arguing against itself. A document that only argues one side is worth less
 than nothing, because a reader who spots the omission stops believing the rest.
 
 ## Where the docs and the code disagree

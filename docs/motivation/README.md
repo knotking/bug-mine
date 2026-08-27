@@ -3,14 +3,15 @@
 Research-backed motivation for the product: what is wrong with the tooling today, where it is
 heading, what the money looks like, and what BugMine does about it.
 
-**Researched:** 2026-08-22. Every statistic is attributed; where a claim could not be sourced,
-that is stated rather than omitted.
+**Researched:** 2026-08-22; [`competition.md`](competition.md) added 2026-08-27. Every statistic is
+attributed; where a claim could not be sourced, that is stated rather than omitted.
 
 | Document | Contents |
 | --- | --- |
 | [`problem.md`](problem.md) | The evidence that current tooling is the wrong shape — measured false-positive rates, breaking-change data, AI-generated code defects, LLM behavioral drift |
 | [`trajectory.md`](trajectory.md) | Where this goes over the next three years, and why the gap widens rather than closes |
 | [`market.md`](market.md) | Market sizes and growth rates, and the uncomfortable finding about which of them BugMine's flagship surface competes in |
+| [`competition.md`](competition.md) | The agent CLIs that shipped security scanning in 2026 — what each covers, the three rows BugMine loses, and why the empty category may be empty for a reason |
 | [`solution.md`](solution.md) | What BugMine offers, mapped line by line to the evidence — including where the evidence bounds the solution |
 | [`blog.md`](blog.md) | **The union of every document in `docs/` in one narrative piece** — problem, market, product, taxonomy, discovery, architecture, decisions, and open questions. Start here if you only read one thing. |
 

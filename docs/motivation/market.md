@@ -97,6 +97,7 @@ stack". The nearest neighbours are all partial:
 | LLM observability (Langfuse, Arize, Braintrust) | Model behavior measurement | Shared cross-customer catalog; anything outside the AI stack |
 | Status/incident (Statuspage aggregators) | Live outages | Anything not currently on fire |
 | Upgrade tooling (Dependabot, Renovate) | Version bumps | What the bump will break |
+| Agent CLIs (Codex Security, Gemini CLI, Copilot) | Security findings in your own code and your dependencies | Non-security bug classes — see [`competition.md`](competition.md) |
 
 Being between categories cuts both ways honestly: there is no incumbent to displace, and there is
 no budget line to land in. The pragmatic reading is that **the entry point should be a category
